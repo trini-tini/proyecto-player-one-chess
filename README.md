@@ -1,8 +1,7 @@
 # Player One: scouting de ajedrez en Chess.com
 
-Trabajo Grupal de Investigación del curso *Ciencia de Datos en la Terminal Linux* (Universidad del Bío-Bío, 2026).
-
-Consola en Nushell que consulta la PubAPI de Chess.com y un pipeline reproducible de ciencia de datos sobre las partidas de jugadores.
+Proyecto Juan Pablo Vargas y Trinidad Saez
+Consola en Nushell que consulta la PubAPI de Chess.com y un pipeline reproducible sobre las partidas de jugadores.
 
 ## Requisitos
 
