@@ -10,11 +10,11 @@ const CACHE_DIR = "cache"
 const VIGENCIA_CACHE = 12hr
 const MAX_REINTENTOS = 3
 
-# ---------------------------------------------------------------------------
-# Helper HTTP: User-Agent, caché y manejo de códigos de estado
-# ---------------------------------------------------------------------------
 
-# User-Agent con el correo de contacto leído de la variable de entorno
+# Helper HTTP: User-Agent, caché y manejo de códigos de estado
+
+
+# User-Agent con el correo  leído de la variable de entorno
 def user-agent [] {
     let correo = ($env.CHESS_EMAIL? | default "")
     if ($correo | is-empty) {
@@ -82,10 +82,7 @@ def api-get [url: string] {
     }
 }
 
-# ---------------------------------------------------------------------------
 # Utilidades
-# ---------------------------------------------------------------------------
-
 # Segundos Unix (UTC) a fecha; null si el campo falta
 def a-fecha [segundos] {
     if $segundos == null { return null }
@@ -128,13 +125,10 @@ def extraer-eco [pgn] {
     if ($eco | is-empty) { null } else { $eco.0.eco }
 }
 
-# ---------------------------------------------------------------------------
 # 1.2.1 Perfil y estadísticas
-# ---------------------------------------------------------------------------
-
 # Perfil de un jugador
 export def "ch perfil" [
-    usuario: string  # nombre de usuario en Chess.com
+    usuario: string  # nombre de usuario en chess.com
 ] {
     let perfil = (api-get $"($API)/player/($usuario | str downcase)")
     if $perfil == null { return }
@@ -162,7 +156,7 @@ export def "ch perfil" [
 # Estadísticas por modalidad de un jugador
 export def "ch stats" [
     usuario: string        # nombre de usuario en Chess.com
-    --modo (-m): string    # modalidad: blitz, rapid, bullet, daily, chess960_daily...
+    --modo (-m): string    # modalidad: blitz, rapid, bullet, daily, chess960_daily,etc
 ] {
     let stats = (api-get $"($API)/player/($usuario | str downcase)/stats")
     if $stats == null { return }
@@ -196,14 +190,11 @@ export def "ch stats" [
     $elegidas
 }
 
-# ---------------------------------------------------------------------------
 # 1.2.2 Partidas
-# ---------------------------------------------------------------------------
-
 # Partidas de un jugador en un mes
 export def "ch partidas" [
     usuario: string            # nombre de usuario en Chess.com
-    anio: int                  # año, por ejemplo 2026
+    anio: int                  # año
     mes: int                   # mes, de 1 a 12
     --modo (-m): string        # time_class: bullet, blitz, rapid o daily
     --color (-c): string       # blancas o negras
