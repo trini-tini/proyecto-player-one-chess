@@ -130,7 +130,7 @@ def extraer-eco [pgn] {
 export def "ch perfil" [
     usuario: string  # nombre de usuario en chess.com
 ] {
-    let perfil = (api-get $"($API)/player/($usuario | str downcase)")
+    let perfil = (api-get $"($API)/player/($usuario | str lowercase)")
     if $perfil == null { return }
 
     let ultimo = (a-fecha $perfil.last_online?)
@@ -158,7 +158,7 @@ export def "ch stats" [
     usuario: string        # nombre de usuario en Chess.com
     --modo (-m): string    # modalidad: blitz, rapid, bullet, daily, chess960_daily,etc
 ] {
-    let stats = (api-get $"($API)/player/($usuario | str downcase)/stats")
+    let stats = (api-get $"($API)/player/($usuario | str lowercase)/stats")
     if $stats == null { return }
 
     # fide es un número suelto, no una modalidad; las otras tres no son partidas
@@ -207,7 +207,7 @@ export def "ch partidas" [
         error make {msg: "--resultado debe ser victoria, derrota o empate"}
     }
 
-    let u = ($usuario | str downcase)
+    let u = ($usuario | str lowercase)
     let mes_txt = ($mes | into string | fill -a r -c "0" -w 2)
     let url_mes = $"($API)/player/($u)/games/($anio)/($mes_txt)"
 
@@ -226,7 +226,7 @@ export def "ch partidas" [
     }
 
     let tabla = ($juegos | each {|g|
-        let es_blancas = (($g.white.username | str downcase) == $u)
+        let es_blancas = (($g.white.username | str lowercase) == $u)
         let propio = (if $es_blancas { $g.white } else { $g.black })
         let rival = (if $es_blancas { $g.black } else { $g.white })
         let color_txt = (if $es_blancas { "blancas" } else { "negras" })
@@ -262,4 +262,162 @@ export def "ch partidas" [
         print -e "Aviso: ninguna partida cumple los filtros indicados."
     }
     $salida
+}
+
+# 2.1 Obtención
+const RAW_DIR = "data/raw"
+const ALFABETO = "abcdefghijklmnopqrstuvwxyz0123456789-_"
+const PRIMO = 2147483647    # 2^31 - 1 (generador de Park-Miller)
+const MULT = 48271
+
+# Valor pseudoaleatorio reproducible a partir del nombre y la semilla.
+# Cada carácter se suma y se multiplica por MULT módulo PRIMO; así nombres
+# parecidos quedan lejos entre sí y el orden no depende del alfabeto.
+def clave-semilla [nombre: string, semilla: int] {
+    let inicial = (($semilla mod $PRIMO) + 1)
+    let mezcla = ($nombre | str lowercase | split chars | enumerate | reduce -f $inicial {|c, acc|
+        let codigo = (($ALFABETO | str index-of $c.item) + 2)
+        (($acc + $codigo + $c.index) * $MULT) mod $PRIMO
+    })
+    ($mezcla * $MULT) mod $PRIMO
+}
+
+# URLs de los últimos `meses` meses calendario (incluido el actual)
+def meses-periodo [meses: int] {
+    let anio = (date now | format date "%Y" | into int)
+    let mes = (date now | format date "%m" | into int)
+    0..($meses - 1) | each {|i|
+        let total = ($anio * 12 + $mes - 1 - $i)
+        {anio: ($total // 12), mes: ($total mod 12 + 1)}
+    }
+}
+
+# Obtiene la muestra de jugadores y guarda sus partidas en data/raw/
+export def "ch scout" [
+    --club: string                 # id del club (último tramo de su URL)
+    --pais: string                 # código ISO del país, por ejemplo CL
+    --n: int = 10                  # cantidad de jugadores a analizar
+    --actividad: string = "all_time"  # grupo de miembros del club: weekly, monthly o all_time
+    --dias-activo: int = 90        # activo si last_online está dentro de estos días
+    --max-consultas: int = 250     # máximo de perfiles a consultar
+    --meses: int = 3               # meses de partidas por jugador
+    --min-partidas: int = 20       # mínimo de partidas con rules = chess
+    --max-partidas: int = 200      # máximo de partidas por jugador (las más recientes)
+    --semilla: int = 42            # orden reproducible de la lista del país
+] {
+    if ($club == null) == ($pais == null) {
+        error make {msg: "Indique exactamente una fuente: --club <id> o --pais <ISO>"}
+    }
+
+    # Candidatos según la fuente
+    let candidatos = if $pais != null {
+        let lista = (api-get $"($API)/country/($pais | str uppercase)/players")
+        if $lista == null { return }
+        print -e $"País ($pais | str uppercase): ($lista.players | length) nombres; ordenando con semilla ($semilla)..."
+        $lista.players
+        | each {|u| {usuario: $u, clave: (clave-semilla $u $semilla)} }
+        | sort-by clave usuario
+        | get usuario
+    } else {
+        if $actividad not-in [weekly monthly all_time] {
+            error make {msg: "--actividad debe ser weekly, monthly o all_time"}
+        }
+        let miembros = (api-get $"($API)/club/($club)/members")
+        if $miembros == null {
+            print -e $"Aviso: la lista de miembros del club ($club) no está disponible."
+            return
+        }
+        let grupo = ($miembros | get -o $actividad | default [])
+        print -e $"Club ($club), grupo ($actividad): ($grupo | length) miembros."
+        $grupo | get -o username | default []
+    }
+
+    if ($candidatos | is-empty) {
+        print -e "Aviso: la fuente no tiene candidatos."
+        return
+    }
+
+    # Se parte de data/raw vacío para que la muestra corresponda a esta ejecución
+    mkdir $RAW_DIR
+    let previos = (ls $RAW_DIR | where name =~ '\.json$')
+    if ($previos | is-not-empty) { $previos | each {|f| rm $f.name } | ignore }
+
+    let periodo = (meses-periodo $meses)
+    let ahora = (date now)
+
+    mut revisados = 0
+    mut activos = 0
+    mut omitidas = 0
+    mut pocas_partidas = 0
+    mut partidas = 0
+    mut muestra = []
+
+    for usuario in $candidatos {
+        if ($muestra | length) >= $n or $revisados >= $max_consultas { break }
+
+        let perfil = (api-get $"($API)/player/($usuario | str lowercase)")
+        $revisados = $revisados + 1
+
+        # Cuentas inexistentes o cerradas se omiten y se cuentan
+        if $perfil == null or ($perfil.status? | default "" | str starts-with "closed") {
+            $omitidas = $omitidas + 1
+            continue
+        }
+
+        let ultimo = (a-fecha $perfil.last_online?)
+        if $ultimo == null or (($ahora - $ultimo) / 1day) > $dias_activo { continue }
+        $activos = $activos + 1
+
+        # Partidas de los meses del período que existan en el archivo del jugador
+        let u = $perfil.username
+        let archivos = (api-get $"($API)/player/($u | str lowercase)/games/archives" | get -o archives | default [])
+        let juegos = ($periodo
+            | each {|p|
+                let mes_txt = ($p.mes | into string | fill -a r -c "0" -w 2)
+                let url = $"($API)/player/($u | str lowercase)/games/($p.anio)/($mes_txt)"
+                if $url in $archivos {
+                    api-get $url | get -o games | default [] | each {|g| $g | insert archivo_mes $"($p.anio)_($mes_txt)" }
+                } else { [] }
+            }
+            | flatten)
+
+        # Tope: se conservan las más recientes; el mínimo se exige sobre rules = chess
+        let conservadas = ($juegos | sort-by end_time -r | first $max_partidas)
+        let estandar = ($conservadas | where rules == "chess" | length)
+        if $estandar < $min_partidas {
+            $pocas_partidas = $pocas_partidas + 1
+            print -e $"  ($u): activo, ($estandar) partidas estándar \(< ($min_partidas)\), descartado"
+            continue
+        }
+
+        # Un archivo por jugador y mes, con la misma estructura de la API (clave games)
+        $conservadas | group-by archivo_mes | transpose archivo_mes juegos | each {|grupo|
+            {games: ($grupo.juegos | reject archivo_mes)} | to json | save -f $"($RAW_DIR)/($u)_($grupo.archivo_mes).json"
+        } | ignore
+
+        let stats = (api-get $"($API)/player/($u | str lowercase)/stats")
+        if $stats != null { $stats | to json | save -f $"($RAW_DIR)/stats_($u).json" }
+
+        $partidas = $partidas + ($conservadas | length)
+        $muestra = ($muestra | append $u)
+        print -e $"  ($u): conservado con ($conservadas | length) partidas \(($estandar) estándar\) [($muestra | length)/($n)]"
+    }
+
+    let resumen = {
+        fuente: (if $pais != null { $"pais ($pais | str uppercase)" } else { $"club ($club) / ($actividad)" })
+        semilla: (if $pais != null { $semilla } else { null })
+        revisados: $revisados
+        activos: $activos
+        cuentas_omitidas: $omitidas
+        descartados_pocas_partidas: $pocas_partidas
+        jugadores: ($muestra | length)
+        partidas_descargadas: $partidas
+        muestra: $muestra
+    }
+    $resumen | to json | save -f $"($RAW_DIR)/resumen_scout.json"
+
+    if ($muestra | length) < $n {
+        print -e $"Aviso: solo se reunieron ($muestra | length) de ($n) jugadores \(se alcanzó el límite de consultas o se agotaron los candidatos\)."
+    }
+    $resumen
 }
