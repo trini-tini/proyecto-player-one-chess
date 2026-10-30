@@ -1,8 +1,8 @@
 # Tareas semanales
 
-## Semana 1 (30-oct → 5-nov): base y comandos de la API
+## Semana 1 (30-oct a 5-nov): base y comandos de la API
 
-**Pía**
+**Trinidad**
 - [x] Estructura del repo y `.gitignore`
 - [ ] Repo en GitHub y ramas `pia` / `juanpablo`
 - [x] Helper `api-get` (User-Agent desde `CHESS_EMAIL`, caché 12 h, 429/404/410)
