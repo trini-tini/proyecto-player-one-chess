@@ -1,6 +1,6 @@
 # Tareas semanales
 
-## Semana 1 (30-oct a  5-nov): base y comandos de la API
+## Semana 1 (30-oct a 5-nov): base y comandos de la API
 
 **Trinidad**
 - [x] Estructura del repo y `.gitignore`
