@@ -475,3 +475,51 @@ export def "ch top" [
         }
     }
 }
+
+
+# ==========================================
+# JUAN PABLO - COMANDO CH PAIS
+# Consulta jugadores de un pais en Chess.com
+# ==========================================
+
+export def "ch pais" [
+    iso: string               # Codigo del pais, por ejemplo CL
+    --n: int = 10             # Cantidad de nombres a mostrar
+] {
+    # Validar el codigo del pais
+    let pais = ($iso | str uppercase)
+
+    if ($pais | str length) != 2 or ($pais !~ '^[A-Z]{2}$') {
+        error make {msg: "El pais debe indicarse con un codigo ISO de dos letras, por ejemplo CL"}
+    }
+
+    # Validar la cantidad solicitada
+    if $n < 1 {
+        error make {msg: "--n debe ser mayor o igual a 1"}
+    }
+
+    # Consultar los jugadores del pais
+    let respuesta = (api-get $"($API)/country/($pais)/players")
+
+    if $respuesta == null {
+        return
+    }
+
+    let jugadores = ($respuesta.players | default [])
+    let total = ($jugadores | length)
+
+    # Mostrar informacion general
+    print $"Pais: ($pais)"
+    print $"Cantidad de jugadores devueltos por la API: ($total)"
+
+    # Mostrar los primeros n nombres
+    $jugadores
+    | first $n
+    | enumerate
+    | each {|fila|
+        {
+            posicion: ($fila.index + 1)
+            usuario: $fila.item
+        }
+    }
+}
