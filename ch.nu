@@ -569,7 +569,7 @@ export def "ch club" [
 
         if ($miembros | is-empty) {
             print "Este grupo no tiene miembros."
-        } else {
+                } else {
             $miembros
             | each {|miembro|
                 {
@@ -577,6 +577,7 @@ export def "ch club" [
                     ingreso: (a-fecha $miembro.joined?)
                 }
             }
+            | print
         }
     }
 }
