@@ -523,3 +523,60 @@ export def "ch pais" [
         }
     }
 }
+
+
+# ==========================================
+# JUAN PABLO - COMANDO CH CLUB
+# Consulta informacion de clubes en Chess.com
+# ==========================================
+
+export def "ch club" [
+    id_club: string  # Identificador del club
+] {
+    # Consultar el perfil del club
+    let club = (api-get $"($API)/club/($id_club)")
+
+    if $club == null {
+        print $"No se encontro el club: ($id_club)"
+        return
+    }
+
+    # Mostrar informacion general
+    let informacion = {
+        nombre: $club.name
+        cantidad_miembros: $club.members_count?
+        fecha_creacion: (a-fecha $club.created?)
+        ultima_actividad: (a-fecha $club.last_activity?)
+    }
+
+    print "INFORMACION DEL CLUB"
+    print $informacion
+
+    # Consultar lista de miembros
+    let respuesta = (api-get $"($API)/club/($id_club)/members")
+
+    if $respuesta == null {
+        print "La lista de miembros no esta disponible (404)."
+        return
+    }
+
+    # Recorrer los tres grupos de miembros
+    for grupo in [weekly monthly all_time] {
+        let miembros = ($respuesta | get -o $grupo | default [])
+
+        print $"GRUPO: ($grupo)"
+        print $"Cantidad de miembros: ($miembros | length)"
+
+        if ($miembros | is-empty) {
+            print "Este grupo no tiene miembros."
+        } else {
+            $miembros
+            | each {|miembro|
+                {
+                    usuario: $miembro.username
+                    ingreso: (a-fecha $miembro.joined?)
+                }
+            }
+        }
+    }
+}
