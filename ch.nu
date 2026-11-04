@@ -421,3 +421,57 @@ export def "ch scout" [
     }
     $resumen
 }
+
+
+
+# ==========================================
+# JUAN PABLO - COMANDO CH TOP
+# Ranking de jugadores de Chess.com
+# ==========================================
+
+export def "ch top" [
+    modalidad: string          # Modalidad del ranking
+    --n: int = 10              # Cantidad de jugadores (maximo 50)
+] {
+    # Validar la cantidad solicitada
+    if $n < 1 or $n > 50 {
+        error make {msg: "--n debe estar entre 1 y 50"}
+    }
+
+    # Consultar los rankings de Chess.com
+    let rankings = (api-get $"($API)/leaderboards")
+
+    if $rankings == null {
+        return
+    }
+
+    # Verificar si existe la modalidad solicitada
+    let modalidades = ($rankings | columns)
+
+    if $modalidad not-in $modalidades {
+        error make {
+            msg: $"Modalidad no valida: ($modalidad). Disponibles: ($modalidades | str join ', ')"
+        }
+    }
+
+    # Seleccionar los jugadores
+    let jugadores = (
+        $rankings
+        | get $modalidad
+        | first $n
+    )
+
+    # Construir la tabla de resultados
+    $jugadores | each {|jugador|
+        {
+            posicion: $jugador.rank
+            usuario: $jugador.username
+            puntaje: $jugador.score
+            pais: (codigo-pais $jugador.country?)
+            titulo: $jugador.title?
+            ganadas: $jugador.win_count?
+            perdidas: $jugador.loss_count?
+            empatadas: $jugador.draw_count?
+        }
+    }
+}
