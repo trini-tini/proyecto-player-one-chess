@@ -581,3 +581,35 @@ export def "ch club" [
         }
     }
 }
+
+
+# ==========================================
+# JUAN PABLO - COMANDO CH PUZZLE
+# Consulta puzzles de Chess.com
+# ==========================================
+
+export def "ch puzzle" [
+    --random  # Mostrar un puzzle aleatorio
+] {
+    # Elegir el endpoint segun la opcion
+    let url = if $random {
+        $"($API)/puzzle/random"
+    } else {
+        $"($API)/puzzle"
+    }
+
+    # Consultar la API
+    let respuesta = (api-get $url)
+
+    if $respuesta == null {
+        print "No se pudo obtener el puzzle."
+        return
+    }
+
+    # Mostrar la informacion del puzzle
+    {
+        titulo: $respuesta.title?
+        fen: $respuesta.fen?
+        imagen: $respuesta.image?
+    }
+}
