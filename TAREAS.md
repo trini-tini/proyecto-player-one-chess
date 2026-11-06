@@ -12,12 +12,12 @@
 - [x] `ch partidas`
 
 **Juan Pablo**
-- [ ] Documentar la estructura JSON de cada endpoint con `curl` + `jq`
-- [ ] 3 consultas `curl`/`jq` para comparar con los comandos
-- [ ] `ch top`
-- [ ] `ch pais`
-- [ ] `ch club`
-- [ ] `ch puzzle`
+- [x] Documentar la estructura JSON de cada endpoint con `curl` + `jq` (`informe/estructura_api.md`)
+- [x] 3 consultas `curl`/`jq` para comparar con los comandos
+- [x] `ch top`
+- [x] `ch pais`
+- [x] `ch club`
+- [x] `ch puzzle`
 
 **Acuerdo:** `api-get <url>` devuelve el JSON ya convertido en datos, o `null` con un mensaje si recibe 404 o 410.
 
@@ -27,7 +27,8 @@
 - [x] `ch scout --pais CL` (orden con semilla, recorrido serial, activos, mínimo y máximo de partidas, resumen)
 - [x] Corrida real con valores por defecto: 12 perfiles revisados, 12 activos, 0 omitidas, 2 descartados por pocas partidas, 10 jugadores, 1.199 partidas
 - [x] Fuente elegida para el análisis: país CL (muestra grande, orden reproducible con semilla, sin el sesgo de afinidad de un club)
-- [ ] Anotar para el informe: la lista de CL viene cortada alfabéticamente (solo nombres de "-" a "ch")
+- [x] Anotar para el informe: la lista de CL viene cortada alfabéticamente (solo nombres de "-" a "ch")
+- [x] Anotar qué flags se ajustaron y por qué (`informe/notas_obtencion.md`)
 
 **Juan Pablo**
 - [ ] `ch clean` (jq + parallel, filtros, resultado vs PGN, ECO y familia, deduplicación, `rating_previo`)
