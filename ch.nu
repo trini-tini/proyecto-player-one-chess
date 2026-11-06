@@ -421,3 +421,195 @@ export def "ch scout" [
     }
     $resumen
 }
+
+
+
+# ==========================================
+# JUAN PABLO - COMANDO CH TOP
+# Ranking de jugadores de Chess.com
+# ==========================================
+
+export def "ch top" [
+    modalidad: string          # Modalidad del ranking
+    --n: int = 10              # Cantidad de jugadores (maximo 50)
+] {
+    # Validar la cantidad solicitada
+    if $n < 1 or $n > 50 {
+        error make {msg: "--n debe estar entre 1 y 50"}
+    }
+
+    # Consultar los rankings de Chess.com
+    let rankings = (api-get $"($API)/leaderboards")
+
+    if $rankings == null {
+        return
+    }
+
+    # Verificar si existe la modalidad solicitada
+    let modalidades = ($rankings | columns)
+
+    if $modalidad not-in $modalidades {
+        error make {
+            msg: $"Modalidad no valida: ($modalidad). Disponibles: ($modalidades | str join ', ')"
+        }
+    }
+
+    # Seleccionar los jugadores
+    let jugadores = (
+        $rankings
+        | get $modalidad
+        | first $n
+    )
+
+    # Construir la tabla de resultados
+    $jugadores | each {|jugador|
+        {
+            posicion: $jugador.rank
+            usuario: $jugador.username
+            puntaje: $jugador.score
+            pais: (codigo-pais $jugador.country?)
+            titulo: $jugador.title?
+            ganadas: $jugador.win_count?
+            perdidas: $jugador.loss_count?
+            empatadas: $jugador.draw_count?
+        }
+    }
+}
+
+
+# ==========================================
+# JUAN PABLO - COMANDO CH PAIS
+# Consulta jugadores de un pais en Chess.com
+# ==========================================
+
+export def "ch pais" [
+    iso: string               # Codigo del pais, por ejemplo CL
+    --n: int = 10             # Cantidad de nombres a mostrar
+] {
+    # Validar el codigo del pais
+    let pais = ($iso | str uppercase)
+
+    if ($pais | str length) != 2 or ($pais !~ '^[A-Z]{2}$') {
+        error make {msg: "El pais debe indicarse con un codigo ISO de dos letras, por ejemplo CL"}
+    }
+
+    # Validar la cantidad solicitada
+    if $n < 1 {
+        error make {msg: "--n debe ser mayor o igual a 1"}
+    }
+
+    # Consultar los jugadores del pais
+    let respuesta = (api-get $"($API)/country/($pais)/players")
+
+    if $respuesta == null {
+        return
+    }
+
+    let jugadores = ($respuesta.players | default [])
+    let total = ($jugadores | length)
+
+    # Mostrar informacion general
+    print $"Pais: ($pais)"
+    print $"Cantidad de jugadores devueltos por la API: ($total)"
+
+    # Mostrar los primeros n nombres
+    $jugadores
+    | first $n
+    | enumerate
+    | each {|fila|
+        {
+            posicion: ($fila.index + 1)
+            usuario: $fila.item
+        }
+    }
+}
+
+
+# ==========================================
+# JUAN PABLO - COMANDO CH CLUB
+# Consulta informacion de clubes en Chess.com
+# ==========================================
+
+export def "ch club" [
+    id_club: string  # Identificador del club
+] {
+    # Consultar el perfil del club
+    let club = (api-get $"($API)/club/($id_club)")
+
+    if $club == null {
+        print $"No se encontro el club: ($id_club)"
+        return
+    }
+
+    # Mostrar informacion general
+    let informacion = {
+        nombre: $club.name
+        cantidad_miembros: $club.members_count?
+        fecha_creacion: (a-fecha $club.created?)
+        ultima_actividad: (a-fecha $club.last_activity?)
+    }
+
+    print "INFORMACION DEL CLUB"
+    print $informacion
+
+    # Consultar lista de miembros
+    let respuesta = (api-get $"($API)/club/($id_club)/members")
+
+    if $respuesta == null {
+        print "La lista de miembros no esta disponible (404)."
+        return
+    }
+
+    # Recorrer los tres grupos de miembros
+    for grupo in [weekly monthly all_time] {
+        let miembros = ($respuesta | get -o $grupo | default [])
+
+        print $"GRUPO: ($grupo)"
+        print $"Cantidad de miembros: ($miembros | length)"
+
+        if ($miembros | is-empty) {
+            print "Este grupo no tiene miembros."
+                } else {
+            $miembros
+            | each {|miembro|
+                {
+                    usuario: $miembro.username
+                    ingreso: (a-fecha $miembro.joined?)
+                }
+            }
+            | print
+        }
+    }
+}
+
+
+# ==========================================
+# JUAN PABLO - COMANDO CH PUZZLE
+# Consulta puzzles de Chess.com
+# ==========================================
+
+export def "ch puzzle" [
+    --random  # Mostrar un puzzle aleatorio
+] {
+    # Elegir el endpoint segun la opcion
+    let url = if $random {
+        $"($API)/puzzle/random"
+    } else {
+        $"($API)/puzzle"
+    }
+
+    # Consultar la API
+    let respuesta = (api-get $url)
+
+    if $respuesta == null {
+        print "No se pudo obtener el puzzle."
+        return
+    }
+
+    # Mostrar la informacion del puzzle
+    {
+        titulo: $respuesta.title?
+        fen: $respuesta.fen?
+        imagen: $respuesta.image?
+    }
+}
