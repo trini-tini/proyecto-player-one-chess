@@ -613,3 +613,87 @@ export def "ch puzzle" [
         imagen: $respuesta.image?
     }
 }
+
+
+
+# ==========================================
+# JUAN PABLO - COMANDO CH CLEAN
+# Limpieza automatica de partidas
+# ==========================================
+
+export def "ch clean" [] {
+
+    # Buscar archivos de partidas descargadas
+    let archivos = (
+        ls data/raw
+        | where name =~ '_[0-9]{4}_[0-9]{2}\.json$'
+        | get name
+    )
+
+    if ($archivos | is-empty) {
+        error make {msg: "No hay archivos de partidas en data/raw"}
+    }
+
+    # Contar las partidas originales
+    let originales = (
+        $archivos
+        | each {|archivo|
+            open $archivo | get -o games | default []
+        }
+        | flatten
+    )
+
+    let total = ($originales | length)
+
+    # Primer filtro: partidas de ajedrez estandar
+    let estandar = (
+        $originales | where rules == "chess"
+    )
+
+    # Segundo filtro: partidas clasificatorias
+    let clasificatorias = (
+        $estandar | where rated == true
+    )
+
+    # Procesamiento con GNU Parallel y jq
+    let procesadas = (
+        ^parallel --jobs 2 --keep-order 'jq -c -f motor/clean.jq {}' ::: ...$archivos
+        | lines
+        | where $it != ""
+        | each {|linea| $linea | from json }
+    )
+
+    # Eliminar partidas duplicadas por uuid
+    let unicas = (
+        $procesadas | uniq-by uuid
+    )
+
+    # Preparar las columnas del CSV
+    let tabla = (
+        $unicas | reject pgn apertura_url
+    )
+
+    # Guardar las partidas limpias
+    $tabla
+    | to csv
+    | save -f data/partidas_limpias.csv
+
+    # Registrar las partidas descartadas
+    let resumen = {
+        partidas_originales: $total
+        descartadas_no_estandar: ($total - ($estandar | length))
+        descartadas_no_clasificatorias: (($estandar | length) - ($clasificatorias | length))
+        descartadas_resultado_invalido: (($clasificatorias | length) - ($procesadas | length))
+        descartadas_duplicadas: (($procesadas | length) - ($unicas | length))
+        partidas_finales: ($unicas | length)
+        archivo_salida: "data/partidas_limpias.csv"
+    }
+
+    # Guardar el resumen de limpieza
+    $resumen
+    | to json
+    | save -f data/resumen_limpieza.json
+
+    print "LIMPIEZA COMPLETADA"
+    $resumen
+}
