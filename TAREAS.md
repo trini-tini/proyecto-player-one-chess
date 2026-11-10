@@ -12,12 +12,12 @@
 - [x] `ch partidas`
 
 **Juan Pablo**
-- [ ] Documentar la estructura JSON de cada endpoint con `curl` + `jq`
-- [ ] 3 consultas `curl`/`jq` para comparar con los comandos
-- [ ] `ch top`
-- [ ] `ch pais`
-- [ ] `ch club`
-- [ ] `ch puzzle`
+- [x] Documentar la estructura JSON de cada endpoint con `curl` + `jq`
+- [x] 3 consultas `curl`/`jq` para comparar con los comandos
+- [x] `ch top`
+- [x] `ch pais`
+- [x] `ch club`
+- [x] `ch puzzle`
 
 **Acuerdo:** `api-get <url>` devuelve el JSON ya convertido en datos, o `null` con un mensaje si recibe 404 o 410.
 
@@ -30,8 +30,8 @@
 - [ ] Anotar para el informe: la lista de CL viene cortada alfabéticamente (solo nombres de "-" a "ch")
 
 **Juan Pablo**
-- [ ] `ch clean` (jq + parallel, filtros, resultado vs PGN, ECO y familia, deduplicación, `rating_previo`)
-- [ ] Registro de filas perdidas en cada paso
+- [x] `ch clean` (jq + parallel, filtros, resultado vs PGN, ECO y familia, deduplicación, `rating_previo`)
+- [x] Registro de filas perdidas en cada paso
 
 **Acuerdo:**
 - Partidas: `data/raw/<usuario>_<AAAA>_<MM>.json`, con la misma estructura de la API (clave `games`)
