@@ -1,0 +1,13 @@
+{
+  "filas_originales": 1199,
+  "descartadas_no_estandar": 1,
+  "descartadas_faltantes": 0,
+  "eco_vacio": 0,
+  "resultado_pgn_asterisco": 0,
+  "discrepancias_pgn": 0,
+  "detalle_discrepancias": [],
+  "descartadas_duplicadas": 0,
+  "descartadas_sin_rating_previo": 21,
+  "filas_finales": 1177,
+  "archivo_salida": "data/partidas_limpias.csv"
+}

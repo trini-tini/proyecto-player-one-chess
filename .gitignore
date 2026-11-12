@@ -3,6 +3,8 @@ cache/
 # JSON crudos de la obtención (se regeneran con ch scout)
 data/raw/*
 !data/raw/.gitkeep
+# CSV intermedio de ch clean (se regenera)
+data/partidas_crudas.csv
 # Variables locales con datos personales
 .env
 *.env
