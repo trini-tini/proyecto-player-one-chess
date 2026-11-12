@@ -6,3 +6,8 @@ data/raw/*
 # Variables locales con datos personales
 .env
 *.env
+data/partidas_temporales.jsonl
+data/partidas_procesadas.jsonl
+data/partidas_unicas.json
+data/partidas_limpias.csv
+data/resumen_limpieza.json
