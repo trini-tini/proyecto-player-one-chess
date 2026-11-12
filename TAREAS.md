@@ -31,11 +31,51 @@
 - [x] Anotar qué flags se ajustaron y por qué (`informe/notas_obtencion.md`)
 
 **Juan Pablo**
-- [ ] `ch clean` (jq + parallel, filtros, resultado vs PGN, ECO y familia, deduplicación, `rating_previo`)
-- [ ] Registro de filas perdidas en cada paso
+- [x] `ch clean` (jq + parallel, filtros, resultado vs PGN, ECO y familia, deduplicación, `rating_previo`)
+- [x] Registro de filas perdidas en cada paso (`data/resumen_limpieza.json`)
 
 **Acuerdo:**
 - Partidas: `data/raw/<usuario>_<AAAA>_<MM>.json`, con la misma estructura de la API (clave `games`)
 - Estadísticas: `data/raw/stats_<usuario>.json`
 - Resumen de la obtención: `data/raw/resumen_scout.json` (incluye la lista `muestra`, útil para la deduplicación)
 - Salida limpia: `data/partidas_limpias.csv`
+
+## Semana 3 (13 a 19-nov): exploración, modelo y avanzados
+
+**Trinidad**
+
+`ch model`
+- [ ] Leer `data/partidas_limpias.csv` y construir las variables: objetivo (victoria = 1; derrota y empate = 0), `d = rating_previo - rating_rival`, color y modalidad
+- [ ] Partición cronológica por `fecha_fin`: 70 % más antiguo para entrenar y 30 % más reciente para evaluar
+- [ ] Escribir los archivos de entrada de `vw` desde Nushell (entrenamiento y prueba)
+- [ ] Ajustar con `vw --loss_function logistic` y guardar el script o la configuración en `motor/`, con la versión de `vw`
+- [ ] Convertir la salida de `vw` en probabilidades con la sigmoide, en Nushell
+- [ ] Comparar en prueba: (a) proporción de victorias del entrenamiento, (b) Elo `E = 1/(1 + 10^(-d/400))` y (c) logística
+- [ ] Exactitud (umbral 0,5) y pérdida logarítmica (probabilidades acotadas a [1e-15, 1 - 1e-15])
+- [ ] Sesgo de `rating_rival`: promedio de |rating posterior - `rating_previo`| de los jugadores analizados
+- [ ] Coeficientes del modelo y si el color muestra una ventaja medible
+- [ ] Guardar los coeficientes en `data/modelo/coeficientes.json`
+
+`ch duelo <usuario1> <usuario2> [--modo]`
+- [ ] Rating actual de cada jugador en la modalidad (con `ch stats`)
+- [ ] Probabilidad de victoria de cada uno con Elo y con el modelo (lee `coeficientes.json`)
+- [ ] Mostrar en qué casos difieren Elo y el modelo
+
+`ch pipeline`
+- [ ] Ejecuta en orden `ch scout`, `ch clean`, `ch explore` y `ch model`
+
+Para el informe (Semana 4)
+- [ ] Por qué la partición es cronológica y no aleatoria
+- [ ] Motor elegido (`vw`), versión y por qué
+- [ ] Composición de la muestra: ratings, partidas por jugador y si alguno concentra una parte desproporcionada
+
+**Juan Pablo**
+- [ ] `ch explore` con polars: % de victorias por color y modalidad, por tramos de `d`, top 10 de ECO, % de victorias por familia, partidas por mes y por jugador
+- [ ] Borrador de los 3 hallazgos
+- [ ] `ch puzzle --tablero` (FEN a tablero de 8 × 8)
+- [ ] Validar con `curl` + `jq` un resultado intermedio contra la API
+
+**Acuerdo:**
+- `ch model` lee `data/partidas_limpias.csv` con las columnas del enunciado: `url`, `fecha_fin`, `jugador`, `rival`, `color`, `modalidad`, `eco`, `familia_eco`, `resultado`, `rating_previo` y `rating_rival`
+- `resultado` usa los valores `victoria`, `derrota` y `empate`
+- `ch model` guarda `data/modelo/coeficientes.json`, que `ch duelo` lee

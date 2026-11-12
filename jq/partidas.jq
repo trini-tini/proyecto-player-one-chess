@@ -1,32 +1,27 @@
+# Convierte un archivo data/raw/<usuario>_<AAAA>_<MM>.json en filas CSV,
+# una por partida, vistas desde el jugador analizado.
+# Uso: jq -r --arg archivo <usuario>_<AAAA>_<MM>.json -f jq/partidas.jq <archivo>
+#
+# Columnas: url, end_time, jugador, rival, color, time_class, rules,
+#           result propio, rating propio, rating rival, Result del PGN, ECO
 
-.games[]
-| select(.rules == "chess" and .rated == true)
-| . as $g
-| ($g.pgn // "" | split("[Result \"")[1]? // "" | split("\"")[0]) as $r
-| select(
-    ($r == "1-0" and $g.white.result == "win" and $g.black.result != "win")
-    or ($r == "0-1" and $g.black.result == "win" and $g.white.result != "win")
-    or ($r == "1/2-1/2" and $g.white.result != "win" and $g.black.result != "win")
-  )
-|
-{
-  uuid: .uuid,
-  url: .url,
-  fecha_unix: .end_time,
-  modalidad: .time_class,
-  reglas: .rules,
-  clasificatoria: .rated,
-  blancas: .white.username,
-  negras: .black.username,
-  rating_blancas: .white.rating,
-  rating_negras: .black.rating,
-  rating_previo_blancas: .white.rating,
-  rating_previo_negras: .black.rating,
-  resultado_blancas: .white.result,
-  resultado_negras: .black.result,
-  resultado_pgn: (.pgn | split("[Result \"")[1] | split("\"")[0]),
-  eco_codigo: (.pgn | split("[ECO \"")[1] | split("\"")[0]),
-  familia_eco: (.pgn | split("[ECO \"")[1] | split("\"")[0] | .[0:1]),
-  pgn: .pgn,
-  apertura_url: .eco
-}
+($archivo | sub("_[0-9]{4}_[0-9]{2}\\.json$"; "")) as $jugador
+| .games[]
+| (if ((.white.username // "") | ascii_downcase) == $jugador then "blancas" else "negras" end) as $color
+| (if $color == "blancas" then .white else .black end) as $propio
+| (if $color == "blancas" then .black else .white end) as $rival
+| [
+    .url,
+    .end_time,
+    $jugador,
+    (($rival.username // "") | ascii_downcase),
+    $color,
+    .time_class,
+    .rules,
+    $propio.result,
+    $propio.rating,
+    $rival.rating,
+    ([(.pgn // "") | capture("\\[Result \"(?<r>[^\"]+)\"\\]") | .r] | first // ""),
+    ([(.pgn // "") | capture("\\[ECO \"(?<e>[A-E][0-9]{2})\"\\]") | .e] | first // "")
+  ]
+| @csv

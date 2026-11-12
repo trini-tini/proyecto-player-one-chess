@@ -105,17 +105,22 @@ def traducir-resultado [codigo] {
     }
 }
 
-# Etiqueta Result del PGN vista desde el color del jugador
-def resultado-pgn [pgn, color: string] {
-    if $pgn == null { return null }
-    let etiqueta = ($pgn | parse --regex '\[Result "(?<r>[^"]+)"\]')
-    if ($etiqueta | is-empty) { return null }
-    match [$etiqueta.0.r $color] {
+# Valor de la etiqueta Result ("1-0", "0-1", "1/2-1/2") visto desde el color del jugador
+def resultado-etiqueta [etiqueta: string, color: string] {
+    match [$etiqueta $color] {
         ["1-0" "blancas"] | ["0-1" "negras"] => "victoria"
         ["0-1" "blancas"] | ["1-0" "negras"] => "derrota"
         ["1/2-1/2" _] => "empate"
         _ => "*"
     }
+}
+
+# Etiqueta Result del PGN vista desde el color del jugador
+def resultado-pgn [pgn, color: string] {
+    if $pgn == null { return null }
+    let etiqueta = ($pgn | parse --regex '\[Result "(?<r>[^"]+)"\]')
+    if ($etiqueta | is-empty) { return null }
+    resultado-etiqueta $etiqueta.0.r $color
 }
 
 # Código ECO desde el PGN (letra A-E y dos dígitos); null si no existe
@@ -621,6 +626,8 @@ export def "ch puzzle" [
 # Limpieza automatica de partidas
 # ==========================================
 
+const COLUMNAS_CRUDAS = "url,fecha_unix,jugador,rival,color,modalidad,reglas,result_propio,rating_propio,rating_rival,etiqueta_pgn,eco"
+
 export def "ch clean" [] {
 
     # Buscar archivos de partidas descargadas
@@ -634,66 +641,93 @@ export def "ch clean" [] {
         error make {msg: "No hay archivos de partidas en data/raw"}
     }
 
-    # Contar las partidas originales
-    let originales = (
-        $archivos
-        | each {|archivo|
-            open $archivo | get -o games | default []
+    # Paso 1: JSON a CSV con GNU Parallel y jq (archivos locales, una fila por partida y jugador analizado)
+    ^parallel --keep-order 'jq -r --arg archivo {/} -f jq/partidas.jq {}' ::: ...$archivos
+    | lines
+    | where $it != ""
+    | prepend $COLUMNAS_CRUDAS
+    | str join "\n"
+    | save -f data/partidas_crudas.csv
+
+    let crudas = (open data/partidas_crudas.csv)
+    let total = ($crudas | length)
+
+    # Paso 2: solo ajedrez estandar
+    let estandar = ($crudas | where reglas == "chess")
+
+    # Paso 3: datos faltantes (se descartan si falta un campo necesario o el result no tiene traduccion)
+    let traducidas = (
+        $estandar | insert resultado {|p| traducir-resultado $p.result_propio }
+    )
+    let completas = (
+        $traducidas | where {|p|
+            [$p.url $p.fecha_unix $p.rival $p.rating_propio $p.rating_rival $p.resultado]
+            | all {|v| $v != null and $v != "" }
+        }
+    )
+    let eco_vacio = ($completas | where eco == "" | length)
+
+    # Paso 4: resultado de la API contra la etiqueta Result del PGN (se conserva el de la API)
+    let verificadas = (
+        $completas | insert resultado_pgn {|p| resultado-etiqueta $p.etiqueta_pgn $p.color }
+    )
+    let con_asterisco = ($verificadas | where resultado_pgn == "*")
+    let discrepancias = (
+        $verificadas | where {|p| $p.resultado_pgn != "*" and $p.resultado_pgn != $p.resultado }
+        | select url jugador resultado resultado_pgn
+    )
+
+    # Paso 5: rating_previo = rating de la partida anterior del mismo jugador y modalidad
+    # (se calcula antes de deduplicar para usar el historial completo de cada jugador)
+    let con_previo = (
+        $verificadas
+        | insert clave {|p| $"($p.jugador)|($p.modalidad)" }
+        | group-by clave
+        | values
+        | each {|grupo|
+            let orden = ($grupo | sort-by fecha_unix)
+            $orden | enumerate | each {|f|
+                let previo = if $f.index == 0 { null } else { ($orden | get ($f.index - 1)).rating_propio }
+                $f.item | insert rating_previo $previo
+            }
         }
         | flatten
     )
 
-    let total = ($originales | length)
+    # Paso 6: una fila por partida; si ambos jugadores estan en la muestra, queda el de menor nombre
+    let unicas = ($con_previo | sort-by jugador | uniq-by url)
 
-    # Primer filtro: partidas de ajedrez estandar
-    let estandar = (
-        $originales | where rules == "chess"
-    )
+    # Paso 7: se descarta la primera partida de cada jugador y modalidad (sin rating_previo)
+    let finales = ($unicas | where rating_previo != null)
 
-    # Segundo filtro: partidas clasificatorias
-    let clasificatorias = (
-        $estandar | where rated == true
-    )
-
-    # Procesamiento con GNU Parallel y jq
-    let procesadas = (
-        ^parallel --jobs 2 --keep-order 'jq -c -f motor/clean.jq {}' ::: ...$archivos
-        | lines
-        | where $it != ""
-        | each {|linea| $linea | from json }
-    )
-
-    # Eliminar partidas duplicadas por uuid
-    let unicas = (
-        $procesadas | uniq-by uuid
-    )
-
-    # Preparar las columnas del CSV
+    # Paso 8: fechas, familia ECO y columnas finales
     let tabla = (
-        $unicas | reject pgn apertura_url
+        $finales
+        | insert fecha_fin {|p| a-fecha $p.fecha_unix | format date "%Y-%m-%d %H:%M:%S" }
+        | insert familia_eco {|p| $p.eco | str substring 0..0 }
+        | sort-by fecha_fin jugador
+        | select url fecha_fin jugador rival color modalidad eco familia_eco resultado rating_previo rating_rival
     )
 
-    # Guardar las partidas limpias
-    $tabla
-    | to csv
-    | save -f data/partidas_limpias.csv
+    $tabla | to csv | save -f data/partidas_limpias.csv
 
-    # Registrar las partidas descartadas
+    # Registro de filas en cada paso
     let resumen = {
-        partidas_originales: $total
+        filas_originales: $total
         descartadas_no_estandar: ($total - ($estandar | length))
-        descartadas_no_clasificatorias: (($estandar | length) - ($clasificatorias | length))
-        descartadas_resultado_invalido: (($clasificatorias | length) - ($procesadas | length))
-        descartadas_duplicadas: (($procesadas | length) - ($unicas | length))
-        partidas_finales: ($unicas | length)
+        descartadas_faltantes: (($estandar | length) - ($completas | length))
+        eco_vacio: $eco_vacio
+        resultado_pgn_asterisco: ($con_asterisco | length)
+        discrepancias_pgn: ($discrepancias | length)
+        detalle_discrepancias: $discrepancias
+        descartadas_duplicadas: (($con_previo | length) - ($unicas | length))
+        descartadas_sin_rating_previo: (($unicas | length) - ($finales | length))
+        filas_finales: ($tabla | length)
         archivo_salida: "data/partidas_limpias.csv"
     }
 
-    # Guardar el resumen de limpieza
-    $resumen
-    | to json
-    | save -f data/resumen_limpieza.json
+    $resumen | to json | save -f data/resumen_limpieza.json
 
     print "LIMPIEZA COMPLETADA"
-    $resumen
+    $resumen | reject detalle_discrepancias
 }
