@@ -1,0 +1,36 @@
+{
+  "comparacion": [
+    {
+      "modelo": "constante",
+      "exactitud": 0.5537383177570093,
+      "log_loss": 0.6885856035851343
+    },
+    {
+      "modelo": "elo",
+      "exactitud": 0.6892523364485982,
+      "log_loss": 0.6600216257611378
+    },
+    {
+      "modelo": "logistica",
+      "exactitud": 0.7149532710280374,
+      "log_loss": 0.5810915408044202
+    }
+  ],
+  "proporcion_victorias_entrenamiento": 0.4709418837675351,
+  "sesgo_rating_rival": 10.0890603085554,
+  "promedio_abs_d": 23.111500701262273,
+  "color": [
+    {
+      "color": "blancas",
+      "partidas": 717,
+      "pct_victorias": 47.28033472803347,
+      "margen_95": 3.654458941531373
+    },
+    {
+      "color": "negras",
+      "partidas": 709,
+      "pct_victorias": 45.41607898448519,
+      "margen_95": 3.6649675772840706
+    }
+  ]
+}

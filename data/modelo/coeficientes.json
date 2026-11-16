@@ -1,0 +1,15 @@
+{
+  "motor": "vw 8.6.1",
+  "escala_d": 100,
+  "modalidad_base": "rapid",
+  "constante": -0.0277075,
+  "d": 4.14326,
+  "blancas": 0.0601227,
+  "modalidades": {
+    "blitz": -0.453136,
+    "bullet": -0.229779
+  },
+  "n_entrenamiento": 998,
+  "n_prueba": 428,
+  "ultima_fecha_entrenamiento": "2026-10-31 23:08:56"
+}

@@ -45,24 +45,29 @@
 **Trinidad**
 
 `ch model`
-- [ ] Leer `data/partidas_limpias.csv` y construir las variables: objetivo (victoria = 1; derrota y empate = 0), `d = rating_previo - rating_rival`, color y modalidad
-- [ ] Partición cronológica por `fecha_fin`: 70 % más antiguo para entrenar y 30 % más reciente para evaluar
-- [ ] Escribir los archivos de entrada de `vw` desde Nushell (entrenamiento y prueba)
-- [ ] Ajustar con `vw --loss_function logistic` y guardar el script o la configuración en `motor/`, con la versión de `vw`
-- [ ] Convertir la salida de `vw` en probabilidades con la sigmoide, en Nushell
-- [ ] Comparar en prueba: (a) proporción de victorias del entrenamiento, (b) Elo `E = 1/(1 + 10^(-d/400))` y (c) logística
-- [ ] Exactitud (umbral 0,5) y pérdida logarítmica (probabilidades acotadas a [1e-15, 1 - 1e-15])
-- [ ] Sesgo de `rating_rival`: promedio de |rating posterior - `rating_previo`| de los jugadores analizados
-- [ ] Coeficientes del modelo y si el color muestra una ventaja medible
-- [ ] Guardar los coeficientes en `data/modelo/coeficientes.json`
+- [x] Leer `data/partidas_limpias.csv` y construir las variables: objetivo (victoria = 1; derrota y empate = 0), `d = rating_previo - rating_rival`, color y modalidad
+- [x] Partición cronológica por `fecha_fin`: 70 % más antiguo para entrenar y 30 % más reciente para evaluar
+- [x] Escribir los archivos de entrada de `vw` desde Nushell (entrenamiento y prueba)
+- [x] Ajustar con `vw --loss_function logistic` y guardar los comandos en `motor/comandos_vw.txt`, con la versión de `vw` (8.6.1)
+- [x] Convertir la salida de `vw` en probabilidades con la sigmoide, en Nushell
+- [x] Comparar en prueba: (a) proporción de victorias del entrenamiento, (b) Elo `E = 1/(1 + 10^(-d/400))` y (c) logística
+- [x] Exactitud (umbral 0,5) y pérdida logarítmica (probabilidades acotadas a [1e-15, 1 - 1e-15])
+- [x] Sesgo de `rating_rival`: promedio de |rating posterior - `rating_previo`| de los jugadores analizados
+- [x] Coeficientes del modelo y si el color muestra una ventaja medible
+- [x] Guardar los coeficientes en `data/modelo/coeficientes.json`
 
 `ch duelo <usuario1> <usuario2> [--modo]`
-- [ ] Rating actual de cada jugador en la modalidad (con `ch stats`)
-- [ ] Probabilidad de victoria de cada uno con Elo y con el modelo (lee `coeficientes.json`)
-- [ ] Mostrar en qué casos difieren Elo y el modelo
+- [x] Rating actual de cada jugador en la modalidad (con `ch stats`)
+- [x] Probabilidad de victoria de cada uno con Elo y con el modelo (lee `coeficientes.json`)
+- [x] Mostrar en qué casos difieren Elo y el modelo
 
 `ch pipeline`
-- [ ] Ejecuta en orden `ch scout`, `ch clean`, `ch explore` y `ch model`
+- [x] Ejecuta en orden `ch scout`, `ch clean` y `ch model`; `--sin-descarga` reutiliza `data/raw/`
+- [ ] Agregar `ch explore` cuando esté listo
+
+Ajustes a `ch scout`
+- [x] `--meses` cuenta bloques de 30 días hacia atrás, para cubrir `--dias-activo`; avisa si no alcanza
+- [ ] Corrida oficial final y actualizar las cifras de `informe/notas_obtencion.md`
 
 Para el informe (Semana 4)
 - [ ] Por qué la partición es cronológica y no aleatoria

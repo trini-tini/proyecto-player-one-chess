@@ -2,7 +2,7 @@
 # una por partida, vistas desde el jugador analizado.
 # Uso: jq -r --arg archivo <usuario>_<AAAA>_<MM>.json -f jq/partidas.jq <archivo>
 #
-# Columnas: url, end_time, jugador, rival, color, time_class, rules,
+# Columnas: url, end_time, jugador, rival, color, time_class, rules, rated,
 #           result propio, rating propio, rating rival, Result del PGN, ECO
 
 ($archivo | sub("_[0-9]{4}_[0-9]{2}\\.json$"; "")) as $jugador
@@ -18,6 +18,7 @@
     $color,
     .time_class,
     .rules,
+    .rated,
     $propio.result,
     $propio.rating,
     $rival.rating,
