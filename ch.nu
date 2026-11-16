@@ -287,14 +287,11 @@ def clave-semilla [nombre: string, semilla: int] {
     ($mezcla * $MULT) mod $PRIMO
 }
 
-# URLs de los últimos `meses` meses calendario (incluido el actual)
-def meses-periodo [meses: int] {
-    let anio = (date now | format date "%Y" | into int)
-    let mes = (date now | format date "%m" | into int)
-    0..($meses - 1) | each {|i|
-        let total = ($anio * 12 + $mes - 1 - $i)
-        {anio: ($total // 12), mes: ($total mod 12 + 1)}
-    }
+# Meses calendario que cubren desde `inicio` hasta hoy (del más reciente al más antiguo)
+def meses-periodo [inicio: datetime] {
+    let desde = (($inicio | format date "%Y" | into int) * 12 + ($inicio | format date "%m" | into int) - 1)
+    let hasta = ((date now | format date "%Y" | into int) * 12 + (date now | format date "%m" | into int) - 1)
+    $desde..$hasta | each {|total| {anio: ($total // 12), mes: ($total mod 12 + 1)} } | reverse
 }
 
 # Obtiene la muestra de jugadores y guarda sus partidas en data/raw/
@@ -305,7 +302,7 @@ export def "ch scout" [
     --actividad: string = "all_time"  # grupo de miembros del club: weekly, monthly o all_time
     --dias-activo: int = 90        # activo si last_online está dentro de estos días
     --max-consultas: int = 250     # máximo de perfiles a consultar
-    --meses: int = 3               # meses de partidas por jugador
+    --meses: int = 3               # meses de partidas por jugador (bloques de 30 días hacia atrás)
     --min-partidas: int = 20       # mínimo de partidas con rules = chess
     --max-partidas: int = 200      # máximo de partidas por jugador (las más recientes)
     --semilla: int = 42            # orden reproducible de la lista del país
@@ -347,8 +344,15 @@ export def "ch scout" [
     let previos = (ls $RAW_DIR | where name =~ '\.json$')
     if ($previos | is-not-empty) { $previos | each {|f| rm $f.name } | ignore }
 
-    let periodo = (meses-periodo $meses)
+    # Período de partidas: últimos meses × 30 días; debe cubrir el período de actividad
     let ahora = (date now)
+    let inicio = ($ahora - ($meses * 30day))
+    let inicio_unix = (($inicio | into int) // 1_000_000_000)
+    let periodo = (meses-periodo $inicio)
+    if ($meses * 30) < $dias_activo {
+        print -e $"Aviso: --meses ($meses) cubre ($meses * 30) días, menos que --dias-activo ($dias_activo). Un jugador activo podría quedar sin partidas en el período."
+    }
+    print -e $"Período de partidas: desde ($inicio | format date '%Y-%m-%d') \(meses ($periodo | each {|p| $'($p.anio)-($p.mes)' } | str join ', ')\)"
 
     mut revisados = 0
     mut activos = 0
@@ -381,7 +385,9 @@ export def "ch scout" [
                 let mes_txt = ($p.mes | into string | fill -a r -c "0" -w 2)
                 let url = $"($API)/player/($u | str lowercase)/games/($p.anio)/($mes_txt)"
                 if $url in $archivos {
-                    api-get $url | get -o games | default [] | each {|g| $g | insert archivo_mes $"($p.anio)_($mes_txt)" }
+                    api-get $url | get -o games | default []
+                    | where {|g| ($g.end_time? | default 0) >= $inicio_unix }
+                    | each {|g| $g | insert archivo_mes $"($p.anio)_($mes_txt)" }
                 } else { [] }
             }
             | flatten)
@@ -411,6 +417,8 @@ export def "ch scout" [
     let resumen = {
         fuente: (if $pais != null { $"pais ($pais | str uppercase)" } else { $"club ($club) / ($actividad)" })
         semilla: (if $pais != null { $semilla } else { null })
+        fecha_obtencion: ($ahora | format date "%Y-%m-%d %H:%M:%S")
+        periodo_desde: ($inicio | format date "%Y-%m-%d %H:%M:%S")
         revisados: $revisados
         activos: $activos
         cuentas_omitidas: $omitidas
@@ -626,7 +634,7 @@ export def "ch puzzle" [
 # Limpieza automatica de partidas
 # ==========================================
 
-const COLUMNAS_CRUDAS = "url,fecha_unix,jugador,rival,color,modalidad,reglas,result_propio,rating_propio,rating_rival,etiqueta_pgn,eco"
+const COLUMNAS_CRUDAS = "url,fecha_unix,jugador,rival,color,modalidad,reglas,clasificatoria,result_propio,rating_propio,rating_rival,etiqueta_pgn,eco"
 
 export def "ch clean" [] {
 
@@ -655,9 +663,13 @@ export def "ch clean" [] {
     # Paso 2: solo ajedrez estandar
     let estandar = ($crudas | where reglas == "chess")
 
+    # Paso 2b: solo partidas clasificatorias; en las demas el rating no se actualiza
+    # y el rival no se empareja por nivel, asi que rating_previo y rating_rival no son comparables
+    let clasificatorias = ($estandar | where {|p| ($p.clasificatoria | into string) == "true" })
+
     # Paso 3: datos faltantes (se descartan si falta un campo necesario o el result no tiene traduccion)
     let traducidas = (
-        $estandar | insert resultado {|p| traducir-resultado $p.result_propio }
+        $clasificatorias | insert resultado {|p| traducir-resultado $p.result_propio }
     )
     let completas = (
         $traducidas | where {|p|
@@ -715,7 +727,8 @@ export def "ch clean" [] {
     let resumen = {
         filas_originales: $total
         descartadas_no_estandar: ($total - ($estandar | length))
-        descartadas_faltantes: (($estandar | length) - ($completas | length))
+        descartadas_no_clasificatorias: (($estandar | length) - ($clasificatorias | length))
+        descartadas_faltantes: (($clasificatorias | length) - ($completas | length))
         eco_vacio: $eco_vacio
         resultado_pgn_asterisco: ($con_asterisco | length)
         discrepancias_pgn: ($discrepancias | length)
@@ -730,4 +743,268 @@ export def "ch clean" [] {
 
     print "LIMPIEZA COMPLETADA"
     $resumen | reject detalle_discrepancias
+}
+
+# 2.4 Modelación
+const MODELO_DIR = "data/modelo"
+const PROP_ENTRENAMIENTO = 0.7
+const ESCALA_D = 100
+const CLIP = 1e-15
+const MODALIDAD_BASE = "rapid"
+
+# Puntaje del motor a probabilidad
+def sigmoide [z] {
+    1 / (1 + ((0 - $z) | math exp))
+}
+
+# Probabilidad de Elo para una diferencia de rating d
+def prob-elo [d] {
+    1 / (1 + (10 ** ((0 - $d) / 400)))
+}
+
+# Exactitud con umbral 0,5
+def exactitud [y: list, p: list] {
+    let aciertos = ($y | zip $p | where {|par| ($par.1 >= 0.5) == ($par.0 == 1) } | length)
+    $aciertos / ($y | length)
+}
+
+# Pérdida logarítmica con probabilidades acotadas a [CLIP, 1 - CLIP]
+def log-loss [y: list, p: list] {
+    $y | zip $p | each {|par|
+        let q = ([([$par.1 $CLIP] | math max) (1 - $CLIP)] | math min)
+        if $par.0 == 1 { 0 - ($q | math ln) } else { 0 - ((1 - $q) | math ln) }
+    } | math avg
+}
+
+# Fila en formato vw: etiqueta (1 o -1) y rasgos d, blancas y modalidad (rapid es la base)
+def linea-vw [p] {
+    let etiqueta = if $p.y == 1 { "1" } else { "-1" }
+    let rasgos = (
+        [$"d:($p.d / $ESCALA_D)"]
+        | append (if $p.color == "blancas" { ["blancas"] } else { [] })
+        | append (if $p.modalidad != $MODALIDAD_BASE { [$p.modalidad] } else { [] })
+        | str join " "
+    )
+    $"($etiqueta) |p ($rasgos)"
+}
+
+# Peso de un rasgo en la salida --invert_hash de vw (0 si no aparece)
+def peso-vw [pesos, nombre: string] {
+    let fila = ($pesos | where nombre == $nombre)
+    if ($fila | is-empty) { 0.0 } else { $fila.0.peso | into float }
+}
+
+# Ajusta la logística con vw y la compara con la proporción constante y con Elo
+export def "ch model" [
+    --passes: int = 500   # Pasadas de vw; con menos de 500 los coeficientes aún no se estabilizan
+] {
+    let archivo = "data/partidas_limpias.csv"
+    if not ($archivo | path exists) {
+        error make {msg: "Falta data/partidas_limpias.csv; ejecute ch clean primero."}
+    }
+    mkdir $MODELO_DIR
+
+    # Variables: victoria (el empate cuenta como 0), d, color y modalidad
+    let partidas = (
+        open $archivo
+        | insert y {|p| if $p.resultado == "victoria" { 1 } else { 0 } }
+        | insert d {|p| $p.rating_previo - $p.rating_rival }
+        | sort-by fecha_fin
+    )
+
+    # Partición cronológica: 70 % más antiguo para entrenar, 30 % más reciente para evaluar
+    let n_train = (($partidas | length) * $PROP_ENTRENAMIENTO | math floor)
+    let train = ($partidas | first $n_train)
+    let test = ($partidas | skip $n_train)
+
+    # Tablas para el motor, preparadas en Nushell
+    let f_train = $"($MODELO_DIR)/entrenamiento.vw"
+    let f_test = $"($MODELO_DIR)/prueba.vw"
+    let f_modelo = $"($MODELO_DIR)/modelo.vw"
+    let f_pesos = $"($MODELO_DIR)/pesos.txt"
+    let f_pred = $"($MODELO_DIR)/puntajes_prueba.txt"
+    $train | each {|p| linea-vw $p } | str join "\n" | save -f $f_train
+    $test | each {|p| linea-vw $p } | str join "\n" | save -f $f_test
+
+    # Motor externo: solo ajuste y puntajes
+    ^vw -d $f_train -f $f_modelo --loss_function logistic --passes $passes -c -k --holdout_off --random_seed 42 --quiet
+    ^vw -t -d $f_train -i $f_modelo --invert_hash $f_pesos --quiet
+    ^vw -t -d $f_test -i $f_modelo -p $f_pred --quiet
+    let version_vw = (^vw --version | str trim)
+
+    # Coeficientes del modelo
+    let pesos = (open $f_pesos | lines | parse --regex '^(?<nombre>[^:]+):(?<hash>\d+):(?<peso>\S+)$')
+    let modalidades = ($train | get modalidad | uniq | where $it != $MODALIDAD_BASE | sort)
+    let coeficientes = {
+        motor: $"vw ($version_vw)"
+        escala_d: $ESCALA_D
+        modalidad_base: $MODALIDAD_BASE
+        constante: (peso-vw $pesos "Constant")
+        d: (peso-vw $pesos "p^d")
+        blancas: (peso-vw $pesos "p^blancas")
+        modalidades: ($modalidades | each {|m| {modalidad: $m, peso: (peso-vw $pesos $"p^($m)")} } | transpose -r -d)
+        n_entrenamiento: ($train | length)
+        n_prueba: ($test | length)
+        ultima_fecha_entrenamiento: ($train | last | get fecha_fin)
+    }
+    $coeficientes | to json | save -f $"($MODELO_DIR)/coeficientes.json"
+
+    # Probabilidades en Nushell
+    let y_test = ($test | get y)
+    let p_constante = ($train | get y | math avg)
+    let probs_constante = ($test | each { $p_constante })
+    let probs_elo = ($test | each {|p| prob-elo $p.d })
+    let probs_logistica = (open $f_pred | lines | each {|l| sigmoide ($l | split row " " | first | into float) })
+
+    let comparacion = [
+        {modelo: "constante", exactitud: (exactitud $y_test $probs_constante), log_loss: (log-loss $y_test $probs_constante)}
+        {modelo: "elo", exactitud: (exactitud $y_test $probs_elo), log_loss: (log-loss $y_test $probs_elo)}
+        {modelo: "logistica", exactitud: (exactitud $y_test $probs_logistica), log_loss: (log-loss $y_test $probs_logistica)}
+    ]
+
+    # Sesgo de rating_rival: cuánto cambia el rating del jugador en una partida
+    let f_crudas = "data/partidas_crudas.csv"
+    let sesgo = if ($f_crudas | path exists) {
+        let posteriores = (
+            open $f_crudas
+            | insert clave {|p| $"($p.url)|($p.jugador)" }
+            | select clave rating_propio
+        )
+        $partidas
+        | insert clave {|p| $"($p.url)|($p.jugador)" }
+        | join $posteriores clave
+        | each {|p| $p.rating_propio - $p.rating_previo | math abs }
+        | math avg
+    } else {
+        print -e "Aviso: falta data/partidas_crudas.csv; no se calcula el sesgo de rating_rival."
+        null
+    }
+
+    # Color: proporción de victorias con blancas y negras (intervalo aproximado del 95 %)
+    let color = (
+        ["blancas" "negras"] | each {|c|
+            let y = ($partidas | where color == $c | get y)
+            let p = ($y | math avg)
+            let error = (1.96 * (($p * (1 - $p) / ($y | length)) | math sqrt))
+            {color: $c, partidas: ($y | length), pct_victorias: ($p * 100), margen_95: ($error * 100)}
+        }
+    )
+
+    let metricas = {
+        comparacion: $comparacion
+        proporcion_victorias_entrenamiento: $p_constante
+        sesgo_rating_rival: $sesgo
+        promedio_abs_d: ($partidas | get d | math abs | math avg)
+        color: $color
+    }
+    $metricas | to json | save -f $"($MODELO_DIR)/metricas.json"
+
+    # Comandos del motor, para el repositorio
+    [
+        $"# Motor: vw ($version_vw)"
+        $"vw -d ($f_train) -f ($f_modelo) --loss_function logistic --passes ($passes) -c -k --holdout_off --random_seed 42 --quiet"
+        $"vw -t -d ($f_train) -i ($f_modelo) --invert_hash ($f_pesos) --quiet"
+        $"vw -t -d ($f_test) -i ($f_modelo) -p ($f_pred) --quiet"
+    ] | str join "\n" | save -f motor/comandos_vw.txt
+
+    print $"Entrenamiento: ($train | length) partidas \(hasta ($coeficientes.ultima_fecha_entrenamiento)\); prueba: ($test | length)"
+    print ($comparacion | table)
+    print ($coeficientes | reject motor n_entrenamiento n_prueba ultima_fecha_entrenamiento | table -e)
+    print $"Sesgo de rating_rival \(promedio |rating posterior - rating_previo|\): ($sesgo)"
+    print ($color | table)
+    $metricas
+}
+
+# 3. Comandos avanzados
+# Probabilidad de victoria según el modelo del pipeline, para una diferencia d y una modalidad.
+# Como el color no se conoce antes del duelo, se promedia jugar con blancas y con negras.
+def prob-modelo [coef, d, modalidad: string] {
+    let peso_modalidad = ($coef.modalidades | get -o $modalidad | default 0.0)
+    let z = ($coef.constante + $coef.d * $d / $coef.escala_d + $peso_modalidad)
+    ((sigmoide ($z + $coef.blancas)) + (sigmoide $z)) / 2
+}
+
+# Rating actual de un jugador en una modalidad (con ch stats)
+def rating-actual [usuario: string, modalidad: string] {
+    let fila = (ch stats $usuario -m $modalidad)
+    if $fila == null {
+        error make {msg: $"No se pudieron obtener las estadísticas de ($usuario)."}
+    }
+    if ($fila | is-empty) or ($fila.0.rating_actual == null) {
+        error make {msg: $"($usuario) no tiene rating en ($modalidad)."}
+    }
+    $fila.0.rating_actual
+}
+
+# Compara dos jugadores con Elo y con el modelo del pipeline
+export def "ch duelo" [
+    usuario1: string
+    usuario2: string
+    --modo (-m): string = "rapid"   # Modalidad: rapid, blitz, bullet o daily
+] {
+    let f_coef = $"($MODELO_DIR)/coeficientes.json"
+    if not ($f_coef | path exists) {
+        error make {msg: $"Falta ($f_coef); ejecute ch model primero."}
+    }
+    let coef = (open $f_coef)
+    let modalidad = ($modo | str replace "chess_" "")
+    if $modalidad != $coef.modalidad_base and $modalidad not-in ($coef.modalidades | columns) {
+        print -e $"Aviso: el modelo no tiene partidas de ($modalidad); se usa la modalidad base \(($coef.modalidad_base)\)."
+    }
+
+    # Rating actual de cada jugador en la modalidad
+    let jugadores = [
+        {usuario: $usuario1, rating: (rating-actual $usuario1 $modalidad)}
+        {usuario: $usuario2, rating: (rating-actual $usuario2 $modalidad)}
+    ]
+
+    let d = ($jugadores.0.rating - $jugadores.1.rating)
+    let tabla = [
+        {usuario: $jugadores.0.usuario, rating: $jugadores.0.rating, prob_elo: (prob-elo $d), prob_modelo: (prob-modelo $coef $d $modalidad)}
+        {usuario: $jugadores.1.usuario, rating: $jugadores.1.rating, prob_elo: (prob-elo (0 - $d)), prob_modelo: (prob-modelo $coef (0 - $d) $modalidad)}
+    ]
+
+    # Dónde difieren: Elo y el modelo para distintas diferencias de rating
+    let comparacion = ([-200 -100 -50 -25 0 25 50 100 200] | each {|x|
+        let e = (prob-elo $x)
+        let m = (prob-modelo $coef $x $modalidad)
+        {d: $x, prob_elo: ($e | math round -p 3), prob_modelo: ($m | math round -p 3), diferencia: ($m - $e | math round -p 3)}
+    })
+
+    print $"Modalidad: ($modalidad); d = ($d)"
+    print ($tabla | table)
+    print "Elo y modelo según la diferencia de rating (jugador 1 menos jugador 2):"
+    print ($comparacion | table)
+    # Pendiente de Elo en la escala logística: ln(10)/400 por punto de rating
+    let pendiente_elo = ((10 | math ln) / 400 * $coef.escala_d)
+    print $"Pendiente de d por cada ($coef.escala_d) puntos: modelo ($coef.d | math round -p 2), Elo ($pendiente_elo | math round -p 2) \(el modelo es ($coef.d / $pendiente_elo | math round -p 1) veces Elo\)."
+    {modalidad: $modalidad, d: $d, jugadores: $tabla, comparacion: $comparacion}
+}
+
+# 2. Pipeline completo
+# Ejecuta las etapas en orden: obtención, depuración, exploración y modelación
+export def "ch pipeline" [
+    --pais: string = "CL"   # Fuente de jugadores
+    --semilla: int = 42     # Semilla del orden de la lista del país
+    --passes: int = 500     # Pasadas de vw
+    --sin-descarga          # Reutiliza data/raw/ (no vuelve a ejecutar ch scout)
+] {
+    print "== 1/4 Obtención (ch scout)"
+    let obtencion = if $sin_descarga {
+        let resumen = $"($RAW_DIR)/resumen_scout.json"
+        if not ($resumen | path exists) {
+            error make {msg: "No hay una obtención previa en data/raw/; ejecute ch pipeline sin --sin-descarga."}
+        }
+        print $"Se reutiliza la obtención guardada en ($resumen)."
+        open $resumen
+    } else {
+        ch scout --pais $pais --semilla $semilla
+    }
+    print "== 2/4 Depuración (ch clean)"
+    let depuracion = (ch clean)
+    print "== 3/4 Exploración (ch explore)"
+    # ch explore (Juan Pablo): se agrega aquí cuando esté en ch.nu
+    print "== 4/4 Modelación (ch model)"
+    let modelacion = (ch model --passes $passes)
+    {obtencion: $obtencion, depuracion: $depuracion, modelacion: $modelacion}
 }

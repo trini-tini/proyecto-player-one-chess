@@ -1,0 +1,4 @@
+# Motor: vw 8.6.1
+vw -d data/modelo/entrenamiento.vw -f data/modelo/modelo.vw --loss_function logistic --passes 500 -c -k --holdout_off --random_seed 42 --quiet
+vw -t -d data/modelo/entrenamiento.vw -i data/modelo/modelo.vw --invert_hash data/modelo/pesos.txt --quiet
+vw -t -d data/modelo/prueba.vw -i data/modelo/modelo.vw -p data/modelo/puntajes_prueba.txt --quiet

@@ -5,6 +5,10 @@ data/raw/*
 !data/raw/.gitkeep
 # CSV intermedio de ch clean (se regenera)
 data/partidas_crudas.csv
+# Archivos intermedios del motor (se regeneran con ch model)
+data/modelo/*.vw
+data/modelo/*.cache
+data/modelo/*.txt
 # Variables locales con datos personales
 .env
 *.env
