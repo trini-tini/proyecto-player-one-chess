@@ -12,3 +12,6 @@ data/modelo/*.txt
 # Variables locales con datos personales
 .env
 *.env
+data/partidas_procesadas.jsonl
+data/partidas_temporales.jsonl
+data/partidas_unicas.json
