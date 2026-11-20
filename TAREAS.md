@@ -75,10 +75,10 @@ Para el informe (Semana 4)
 - [ ] Composición de la muestra: ratings, partidas por jugador y si alguno concentra una parte desproporcionada
 
 **Juan Pablo**
-- [ ] `ch explore` con polars: % de victorias por color y modalidad, por tramos de `d`, top 10 de ECO, % de victorias por familia, partidas por mes y por jugador
-- [ ] Borrador de los 3 hallazgos
-- [ ] `ch puzzle --tablero` (FEN a tablero de 8 × 8)
-- [ ] Validar con `curl` + `jq` un resultado intermedio contra la API
+- [x] `ch explore` con polars: % de victorias por color y modalidad, por tramos de `d`, top 10 de ECO, % de victorias por familia, partidas por mes y por jugador
+- [x] Borrador de los 3 hallazgos
+- [x] `ch puzzle --tablero` (FEN a tablero de 8 × 8)
+- [x] Validar con `curl` + `jq` un resultado intermedio contra la API
 
 **Acuerdo:**
 - `ch model` lee `data/partidas_limpias.csv` con las columnas del enunciado: `url`, `fecha_fin`, `jugador`, `rival`, `color`, `modalidad`, `eco`, `familia_eco`, `resultado`, `rating_previo` y `rating_rival`
