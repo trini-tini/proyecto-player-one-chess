@@ -2,35 +2,35 @@
   "comparacion": [
     {
       "modelo": "constante",
-      "exactitud": 0.5537383177570093,
-      "log_loss": 0.6885856035851343
+      "exactitud": 0.5450346420323325,
+      "log_loss": 0.69061978703221
     },
     {
       "modelo": "elo",
-      "exactitud": 0.6892523364485982,
-      "log_loss": 0.6600216257611378
+      "exactitud": 0.7159353348729792,
+      "log_loss": 0.6581088007743943
     },
     {
       "modelo": "logistica",
-      "exactitud": 0.7149532710280374,
-      "log_loss": 0.5810915408044202
+      "exactitud": 0.7321016166281755,
+      "log_loss": 0.5379936443926236
     }
   ],
-  "proporcion_victorias_entrenamiento": 0.4709418837675351,
-  "sesgo_rating_rival": 10.0890603085554,
-  "promedio_abs_d": 23.111500701262273,
+  "proporcion_victorias_entrenamiento": 0.4826216484607746,
+  "sesgo_rating_rival": 9.413194444444445,
+  "promedio_abs_d": 19.824305555555554,
   "color": [
     {
       "color": "blancas",
-      "partidas": 717,
-      "pct_victorias": 47.28033472803347,
-      "margen_95": 3.654458941531373
+      "partidas": 729,
+      "pct_victorias": 47.73662551440329,
+      "margen_95": 3.625908902736725
     },
     {
       "color": "negras",
-      "partidas": 709,
-      "pct_victorias": 45.41607898448519,
-      "margen_95": 3.6649675772840706
+      "partidas": 711,
+      "pct_victorias": 47.11673699015471,
+      "margen_95": 3.6691713711044716
     }
   ]
 }
