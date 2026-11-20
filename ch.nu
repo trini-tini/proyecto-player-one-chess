@@ -1003,7 +1003,7 @@ export def "ch pipeline" [
     print "== 2/4 Depuración (ch clean)"
     let depuracion = (ch clean)
     print "== 3/4 Exploración (ch explore)"
-    # ch explore (Juan Pablo): se agrega aquí cuando esté en ch.nu
+    ch explore
     print "== 4/4 Modelación (ch model)"
     let modelacion = (ch model --passes $passes)
     {obtencion: $obtencion, depuracion: $depuracion, modelacion: $modelacion}
