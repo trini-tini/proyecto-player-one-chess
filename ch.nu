@@ -1054,6 +1054,9 @@ export def "ch pipeline" [
 
 export def "ch explore" [] {
 
+    ^./.venv/bin/python explore_polars.py
+    return
+
     let archivo = "data/partidas_limpias.csv"
 
     if not ($archivo | path exists) {
