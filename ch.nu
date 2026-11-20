@@ -600,9 +600,9 @@ export def "ch club" [
 # JUAN PABLO - COMANDO CH PUZZLE
 # Consulta puzzles de Chess.com
 # ==========================================
-
 export def "ch puzzle" [
-    --random  # Mostrar un puzzle aleatorio
+    --random   # Mostrar un puzzle aleatorio
+    --tablero  # Mostrar el tablero en la terminal
 ] {
     # Elegir el endpoint segun la opcion
     let url = if $random {
@@ -619,6 +619,44 @@ export def "ch puzzle" [
         return
     }
 
+    # Mostrar tablero de ajedrez a partir del FEN
+    if $tablero {
+        let fen = $respuesta.fen?
+
+        if $fen == null {
+            print "El puzzle no tiene una posicion FEN."
+        } else {
+            let piezas = {
+                r: "♜", n: "♞", b: "♝", q: "♛", k: "♚", p: "♟"
+                R: "♖", N: "♘", B: "♗", Q: "♕", K: "♔", P: "♙"
+            }
+
+            let posicion = ($fen | split row " " | first)
+            let filas = ($posicion | split row "/")
+
+            print "\n=== TABLERO DEL PUZZLE ==="
+
+            for fila in ($filas | enumerate) {
+                let casillas = (
+                    $fila.item
+                    | split chars
+                    | each {|c|
+                        if ($c =~ '^[1-8]$') {
+                            1..($c | into int) | each { "·" }
+                        } else {
+                            [($piezas | get $c)]
+                        }
+                    }
+                    | flatten
+                    | str join " "
+                )
+
+                print $"(8 - $fila.index) ($casillas)"
+            }
+
+            print "  a b c d e f g h"
+        }
+    }
     # Mostrar la informacion del puzzle
     {
         titulo: $respuesta.title?
