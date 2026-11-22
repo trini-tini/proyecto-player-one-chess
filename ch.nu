@@ -89,6 +89,11 @@ def a-fecha [segundos] {
     $segundos * 1_000_000_000 | into datetime -z UTC
 }
 
+# Texto "AAAA-MM-DD HH:MM:SS" en UTC (formato de fecha_fin en partidas_limpias.csv) a fecha
+def texto-a-fecha [texto: string] {
+    $"($texto) +0000" | into datetime -f "%Y-%m-%d %H:%M:%S %z"
+}
+
 # "https://api.chess.com/pub/country/CL" -> "CL"
 def codigo-pais [url] {
     if $url == null { return null }
@@ -821,11 +826,12 @@ export def "ch explore" [] {
 
     let df = (
         open $archivo
+        | update fecha_fin {|p| texto-a-fecha $p.fecha_fin }
         | polars into-df
         | polars with-column [
             ((polars col resultado) == "victoria" | polars cast i64 | polars as victoria)
             ((polars col rating_previo) - (polars col rating_rival) | polars as d)
-            (polars col fecha_fin | polars str-slice 0 -l 7 | polars as mes)
+            (polars col fecha_fin | polars strftime "%Y-%m" | polars as mes)
         ]
         | polars collect
     )
@@ -981,6 +987,7 @@ export def "ch model" [
         open $archivo
         | insert y {|p| if $p.resultado == "victoria" { 1 } else { 0 } }
         | insert d {|p| $p.rating_previo - $p.rating_rival }
+        | update fecha_fin {|p| texto-a-fecha $p.fecha_fin }
         | sort-by fecha_fin
     )
 
@@ -1017,7 +1024,7 @@ export def "ch model" [
         modalidades: ($modalidades | each {|m| {modalidad: $m, peso: (peso-vw $pesos $"p^($m)")} } | transpose -r -d)
         n_entrenamiento: ($train | length)
         n_prueba: ($test | length)
-        ultima_fecha_entrenamiento: ($train | last | get fecha_fin)
+        ultima_fecha_entrenamiento: ($train | last | get fecha_fin | format date "%Y-%m-%d %H:%M:%S")
     }
     $coeficientes | to json | save -f $"($MODELO_DIR)/coeficientes.json"
 

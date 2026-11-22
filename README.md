@@ -9,6 +9,33 @@ Consola en Nushell que consulta la PubAPI de Chess.com y un pipeline reproducibl
 - `curl`, `jq`, GNU `parallel`
 - Vowpal Wabbit (`vw`)
 
+## Instalación
+
+Probado en Ubuntu 24.04 (WSL) con Nushell 0.114.1, `jq` 1.7, GNU Parallel 20231122 y `vw` 8.6.1.
+
+```bash
+# Herramientas del sistema
+sudo apt install curl jq parallel vowpal-wabbit
+
+# Nushell y su plugin polars (con Rust/cargo instalado)
+cargo install nu --version 0.114.1
+cargo install nu_plugin_polars --version 0.114.1
+```
+
+Dentro de Nushell, registrar el plugin una vez:
+
+```nu
+plugin add ~/.cargo/bin/nu_plugin_polars
+plugin use polars
+```
+
+Clonar el repositorio:
+
+```bash
+git clone https://github.com/trini-tini/proyecto-player-one-chess.git
+cd proyecto-player-one-chess
+```
+
 ## Uso
 
 Desde la raíz del repositorio, dentro de Nushell:
@@ -35,3 +62,7 @@ use ch.nu *
 | `ch pipeline [--pais iso] [--semilla s] [--sin-descarga]` | `ch pipeline --sin-descarga` |
 
 `ch explore` usa el plugin `polars` de Nushell sobre `data/partidas_limpias.csv` y guarda sus tablas en `data/exploracion/`.
+
+## Informe
+
+El informe está en `informe/informe.pdf`; su fuente es `informe/informe.md` (se compila con `pandoc informe.md -H preambulo.tex --pdf-engine=lualatex -o informe.pdf` desde `informe/`).

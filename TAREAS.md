@@ -70,9 +70,9 @@ Ajustes a `ch scout`
 - [x] Corrida oficial final (22-nov) y actualizar las cifras de `informe/notas_obtencion.md`
 
 Para el informe (Semana 4)
-- [ ] Por qué la partición es cronológica y no aleatoria
-- [ ] Motor elegido (`vw`), versión y por qué
-- [ ] Composición de la muestra: ratings, partidas por jugador y si alguno concentra una parte desproporcionada
+- [x] Por qué la partición es cronológica y no aleatoria
+- [x] Motor elegido (`vw`), versión y por qué
+- [x] Composición de la muestra: ratings, partidas por jugador y si alguno concentra una parte desproporcionada
 
 **Juan Pablo**
 - [x] `ch explore` con polars: % de victorias por color y modalidad, por tramos de `d`, top 10 de ECO, % de victorias por familia, partidas por mes y por jugador
@@ -89,3 +89,12 @@ Correcciones ( 22-nov)
 - `ch model` lee `data/partidas_limpias.csv` con las columnas del enunciado: `url`, `fecha_fin`, `jugador`, `rival`, `color`, `modalidad`, `eco`, `familia_eco`, `resultado`, `rating_previo` y `rating_rival`
 - `resultado` usa los valores `victoria`, `derrota` y `empate`
 - `ch model` guarda `data/modelo/coeficientes.json`, que `ch duelo` lee
+
+## Semana 4 (20 a 26-nov): informe y entrega
+
+**Trinidad**
+- [x] Informe completo en `informe/informe.md` (Markdown) y `informe/informe.pdf`: comandos, API y procesamiento, comparaciones con `curl` + `jq`, obtención, depuración, exploración y hallazgos, modelación, `ch duelo` y `--tablero`
+- [x] README: instalación y ejemplos de todos los comandos
+- [x] Revisión cruzada: clon limpio desde GitHub y ejecución de todos los comandos (22-nov)
+
+
