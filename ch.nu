@@ -600,9 +600,9 @@ export def "ch club" [
 # JUAN PABLO - COMANDO CH PUZZLE
 # Consulta puzzles de Chess.com
 # ==========================================
-
 export def "ch puzzle" [
-    --random  # Mostrar un puzzle aleatorio
+    --random   # Mostrar un puzzle aleatorio
+    --tablero  # Mostrar el tablero en la terminal
 ] {
     # Elegir el endpoint segun la opcion
     let url = if $random {
@@ -619,6 +619,44 @@ export def "ch puzzle" [
         return
     }
 
+    # Mostrar tablero de ajedrez a partir del FEN
+    if $tablero {
+        let fen = $respuesta.fen?
+
+        if $fen == null {
+            print "El puzzle no tiene una posicion FEN."
+        } else {
+            let piezas = {
+                r: "♜", n: "♞", b: "♝", q: "♛", k: "♚", p: "♟"
+                R: "♖", N: "♘", B: "♗", Q: "♕", K: "♔", P: "♙"
+            }
+
+            let posicion = ($fen | split row " " | first)
+            let filas = ($posicion | split row "/")
+
+            print "\n=== TABLERO DEL PUZZLE ==="
+
+            for fila in ($filas | enumerate) {
+                let casillas = (
+                    $fila.item
+                    | split chars
+                    | each {|c|
+                        if ($c =~ '^[1-8]$') {
+                            1..($c | into int) | each { "·" }
+                        } else {
+                            [($piezas | get $c)]
+                        }
+                    }
+                    | flatten
+                    | str join " "
+                )
+
+                print $"(8 - $fila.index) ($casillas)"
+            }
+
+            print "  a b c d e f g h"
+        }
+    }
     # Mostrar la informacion del puzzle
     {
         titulo: $respuesta.title?
@@ -743,6 +781,140 @@ export def "ch clean" [] {
 
     print "LIMPIEZA COMPLETADA"
     $resumen | reject detalle_discrepancias
+}
+
+# ==========================================
+# JUAN PABLO - COMANDO CH EXPLORE
+# Exploracion de partidas con polars
+# ==========================================
+# 2.3 Exploración
+const EXPLORACION_DIR = "data/exploracion"
+
+# Partidas, victorias y % de victorias por los grupos indicados
+def victorias-por [df, ...grupos: string] {
+    $df
+    | polars group-by ...$grupos
+    | polars agg [
+        (polars col victoria | polars count | polars as partidas)
+        (polars col victoria | polars sum | polars as victorias)
+    ]
+    | polars with-column ((polars col victorias) * 100.0 / (polars col partidas) | polars as pct_victorias)
+    | polars sort-by ...$grupos
+    | polars collect
+}
+
+# DataFrame a tabla de Nushell, con los porcentajes y promedios redondeados
+def tabla-nu [df] {
+    $df | polars into-nu | each {|fila|
+        $fila | items {|columna, valor|
+            if ($valor | describe) == "float" { {$columna: ($valor | math round -p 2)} } else { {$columna: $valor} }
+        } | reduce -f {} {|it, acc| $acc | merge $it }
+    }
+}
+
+# Tablas descriptivas de data/partidas_limpias.csv; se guardan en data/exploracion/
+export def "ch explore" [] {
+    let archivo = "data/partidas_limpias.csv"
+    if not ($archivo | path exists) {
+        error make {msg: "No existe data/partidas_limpias.csv. Ejecute ch clean primero."}
+    }
+
+    let df = (
+        open $archivo
+        | polars into-df
+        | polars with-column [
+            ((polars col resultado) == "victoria" | polars cast i64 | polars as victoria)
+            ((polars col rating_previo) - (polars col rating_rival) | polars as d)
+            (polars col fecha_fin | polars str-slice 0 -l 7 | polars as mes)
+        ]
+        | polars collect
+    )
+    let total = ($df | polars shape | get rows.0)
+
+    # Tramos de d de 25 puntos (|d| medio ≈ 20, así que tramos de 100 dejarían casi todo en dos grupos)
+    let con_tramo = (
+        $df
+        | polars with-column (
+            polars when ((polars col d) <= -51) (polars lit "<= -51")
+            | polars when ((polars col d) <= -26) (polars lit "-50 a -26")
+            | polars when ((polars col d) <= -1) (polars lit "-25 a -1")
+            | polars when ((polars col d) == 0) (polars lit "0")
+            | polars when ((polars col d) <= 25) (polars lit "1 a 25")
+            | polars when ((polars col d) <= 50) (polars lit "26 a 50")
+            | polars otherwise (polars lit ">= 51")
+            | polars as tramo_d
+        )
+        | polars collect
+    )
+    let por_tramo = (
+        $con_tramo
+        | polars group-by tramo_d
+        | polars agg [
+            (polars col d | polars min | polars as d_min)
+            (polars col victoria | polars count | polars as partidas)
+            (polars col victoria | polars sum | polars as victorias)
+        ]
+        | polars with-column ((polars col victorias) * 100.0 / (polars col partidas) | polars as pct_victorias)
+        | polars sort-by d_min
+        | polars drop d_min
+        | polars collect
+    )
+
+    let top_eco = (
+        $df
+        | polars filter ((polars col eco) != "")
+        | polars group-by eco
+        | polars agg [(polars col victoria | polars count | polars as partidas)]
+        | polars sort-by partidas eco -r [true false]
+        | polars first 10
+        | polars collect
+    )
+
+    let por_mes = (
+        $df
+        | polars group-by mes
+        | polars agg [(polars col victoria | polars count | polars as partidas)]
+        | polars sort-by mes
+        | polars collect
+    )
+
+    # Partidas por jugador, su parte de la muestra y su rating previo medio
+    let por_jugador = (
+        $df
+        | polars group-by jugador
+        | polars agg [
+            (polars col victoria | polars count | polars as partidas)
+            (polars col victoria | polars sum | polars as victorias)
+            (polars col rating_previo | polars mean | polars as rating_previo_medio)
+        ]
+        | polars with-column [
+            ((polars col partidas) * 100.0 / $total | polars as pct_muestra)
+            ((polars col victorias) * 100.0 / (polars col partidas) | polars as pct_victorias)
+        ]
+        | polars sort-by partidas jugador -r [true false]
+        | polars collect
+    )
+
+    let tablas = {
+        victorias_por_color: (tabla-nu (victorias-por $df color))
+        victorias_por_modalidad: (tabla-nu (victorias-por $df modalidad))
+        victorias_por_color_y_modalidad: (tabla-nu (victorias-por $df color modalidad))
+        victorias_por_tramo_d: (tabla-nu $por_tramo)
+        top10_eco: (tabla-nu $top_eco)
+        victorias_por_familia_eco: (tabla-nu (victorias-por $df familia_eco))
+        partidas_por_mes: (tabla-nu $por_mes)
+        partidas_por_jugador: (tabla-nu $por_jugador)
+    }
+
+    mkdir $EXPLORACION_DIR
+    print $"=== EXPLORACION: ($total) filas de ($archivo) ==="
+    $tablas | items {|nombre, tabla|
+        $tabla | to csv | save -f $"($EXPLORACION_DIR)/($nombre).csv"
+        print $"\n== ($nombre | str replace -a '_' ' ')"
+        print ($tabla | table)
+    } | ignore
+    print $"\nTablas guardadas en ($EXPLORACION_DIR)/"
+    $tablas
 }
 
 # 2.4 Modelación
@@ -1003,8 +1175,8 @@ export def "ch pipeline" [
     print "== 2/4 Depuración (ch clean)"
     let depuracion = (ch clean)
     print "== 3/4 Exploración (ch explore)"
-    # ch explore (Juan Pablo): se agrega aquí cuando esté en ch.nu
+    let exploracion = (ch explore)
     print "== 4/4 Modelación (ch model)"
     let modelacion = (ch model --passes $passes)
-    {obtencion: $obtencion, depuracion: $depuracion, modelacion: $modelacion}
+    {obtencion: $obtencion, depuracion: $depuracion, exploracion: $exploracion, modelacion: $modelacion}
 }
