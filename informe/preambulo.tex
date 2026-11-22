@@ -1,0 +1,8 @@
+% Fuentes del informe (se compila con lualatex en Windows).
+% Segoe UI Symbol completa los caracteres que faltan, como las piezas de ajedrez del tablero.
+\directlua{luaotfload.add_fallback("simbolos",{"Segoe UI Symbol:mode=node;"})}
+\setmainfont{Cambria}[BoldFont={Cambria Bold},ItalicFont={Cambria Italic},BoldItalicFont={Cambria Bold Italic},RawFeature={fallback=simbolos}]
+\setmonofont{Consolas}[Scale=0.85,BoldFont={Consolas Bold},RawFeature={fallback=simbolos}]
+\usepackage{fvextra}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,breakanywhere,commandchars=\\\{\}}
+\fvset{breaklines,breakanywhere}
