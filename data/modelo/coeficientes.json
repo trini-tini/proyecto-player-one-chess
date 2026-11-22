@@ -2,14 +2,15 @@
   "motor": "vw 8.6.1",
   "escala_d": 100,
   "modalidad_base": "rapid",
-  "constante": 0.0542884,
-  "d": 4.63203,
-  "blancas": -0.0138521,
+  "constante": -0.0982154,
+  "d": 5.53189,
+  "blancas": 0.207882,
   "modalidades": {
-    "blitz": -0.51749,
-    "bullet": -0.578252
+    "blitz": -0.357181,
+    "bullet": -0.358082,
+    "daily": 0.938132
   },
-  "n_entrenamiento": 1007,
-  "n_prueba": 433,
-  "ultima_fecha_entrenamiento": "2026-11-01 15:08:10"
+  "n_entrenamiento": 979,
+  "n_prueba": 420,
+  "ultima_fecha_entrenamiento": "2026-11-13 23:12:23"
 }

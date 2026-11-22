@@ -2,66 +2,74 @@
 
 ## 1. Introducción
 
-Se realizó un análisis exploratorio de **1.440 registros de partidas de Chess.com**, utilizando el comando `ch explore`, desarrollado en Nushell e integrado con la biblioteca Polars de Python.
+Se analizaron las 1.399 filas de `data/partidas_limpias.csv` (corrida oficial del 22-nov-2026: 10 jugadores de Chile, partidas desde el 24-ago-2026). Cada fila es una partida vista desde un jugador de la muestra.
 
-El objetivo fue identificar patrones relacionados con el porcentaje de victorias, las diferencias de rating entre jugadores y rivales, y la distribución de partidas según sus características.
+Las tablas se obtuvieron con `ch explore`, que usa el plugin `polars` de Nushell y guarda cada tabla en `data/exploracion/`.
 
-A continuación, se presentan tres hallazgos obtenidos a partir de los resultados.
+## 2. Hallazgo 1: la diferencia de rating parece decidir el resultado, pero es un efecto de la fuga en `rating_rival`
 
-## 2. Hallazgo 1: El porcentaje de victorias varía según la modalidad
+Con `d = rating_previo - rating_rival`, el porcentaje de victorias cambia de forma brusca entre tramos muy cercanos:
 
-Se observaron diferencias en el porcentaje de victorias entre las distintas modalidades de juego.
+| Tramo de `d` | Partidas | % victorias |
+|---|---:|---:|
+| ≤ -51 | 32 | 12,50 |
+| -50 a -26 | 119 | 2,52 |
+| -25 a -1 | 552 | 32,43 |
+| 0 | 34 | 61,76 |
+| 1 a 25 | 491 | 60,49 |
+| 26 a 50 | 123 | 91,87 |
+| ≥ 51 | 48 | 89,58 |
 
-- **Rapid:** 51,45 % de victorias en 760 partidas.
-- **Blitz:** 43,38 % de victorias en 491 partidas.
-- **Bullet:** 41,18 % de victorias en 187 partidas.
-- **Daily:** 100 % de victorias en 2 partidas.
+Según Elo, una diferencia de 25 a 50 puntos debería dar entre un 54 % y un 57 % de victorias, no un 92 %. El salto se explica porque la API entrega el rating del rival después de la partida es decir si el jugador gana, el rival pierde puntos y `d` sube; si pierde, `d` baja. El cambio promedio por partida es de unos 10 puntos (`sesgo_rating_rival` = 10,6 en `data/modelo/metricas.json`), comparable al promedio de |`d`| (22,1).
 
-La modalidad Rapid presentó el mayor porcentaje de victorias entre las modalidades con una cantidad considerable de registros, superando a Blitz en **8,07 puntos porcentuales**.
+Para comprobarlo, se estimó el rating del rival antes de la partida sumándole el cambio del propio jugador (los cambios de ambos jugadores son simétricos). Con esa diferencia aproximada, el porcentaje de victorias queda casi plano:
 
-Por su parte, Bullet registró un porcentaje de victorias inferior al de Rapid y Blitz.
+| Tramo de `d` aproximada | Partidas | % victorias |
+|---|---:|---:|
+| ≤ -26 | 93 | 46,2 |
+| -25 a -1 | 605 | 42,6 |
+| 0 | 43 | 53,5 |
+| 1 a 25 | 549 | 49,5 |
+| ≥ 26 | 109 | 58,7 |
 
-El resultado de Daily debe interpretarse con especial precaución, debido a que solamente se analizaron dos partidas de esta modalidad.
+Implicancia: la ventaja de la logística sobre Elo en la prueba (pérdida logarítmica 0,544 contra 0,656) y su coeficiente de `d` (5,53 por 100 puntos, cerca de 10 veces la pendiente de Elo, 0,576) se deben en gran parte a esta fuga, y no anticipan cómo resultaría una partida futura. Chess.com empareja rivales de rating muy parecido, así que antes de jugar la diferencia real es pequeña y aporta poca información.
 
-## 3. Hallazgo 2: La diferencia de rating se relaciona con el resultado de las partidas
+## 3. Hallazgo 2: no hay una ventaja medible por jugar con blancas
 
-Se analizó la diferencia entre el rating previo del jugador y el rating de su rival, definida como:
+| Color | Partidas | % victorias | Margen 95 % |
+|---|---:|---:|---:|
+| Blancas | 702 | 47,72 | ± 3,69 |
+| Negras | 697 | 46,63 | ± 3,70 |
 
-**d = rating_previo - rating_rival**
+La diferencia (1,1 puntos) es mucho menor que el margen de cada proporción, y por modalidad no tiene un signo constante: en rapid las blancas ganan más (51,65 % contra 46,27 %), pero en blitz y bullet ganan menos.
 
-Los resultados muestran que:
+Implicancia: en este nivel de juego (rating previo medio por jugador entre 139 y 1.429), la ventaja teórica de las blancas no se distingue del ruido con unas 700 partidas por color.
 
-- Los jugadores con una desventaja de 1 a 100 puntos de rating ganaron el **28,57 %** de sus partidas (693 registros).
-- Los jugadores con una ventaja de 1 a 100 puntos de rating ganaron el **65,36 %** de sus partidas (690 registros).
-- Los jugadores con una ventaja de 101 a 200 puntos obtuvieron un **100 %** de victorias, aunque este grupo solo contiene 14 partidas.
+## 4. Hallazgo 3: la muestra se concentra en pocos jugadores y en las semanas más recientes
 
-Estos resultados sugieren una asociación entre tener un rating superior al del rival y obtener una mayor proporción de victorias.
+| Jugador | Filas | % de la muestra | Rating previo medio |
+|---|---:|---:|---:|
+| alex_geell | 199 | 14,22 | 663 |
+| apr2025 | 199 | 14,22 | 1.429 |
+| alvaropuchi | 198 | 14,15 | 357 |
+| 3squin4 | 191 | 13,65 | 707 |
+| otros 6 jugadores | 612 | 43,75 | 139 a 802 |
 
-No obstante, se trata de un análisis descriptivo que no permite establecer relaciones causales. Además, los grupos con pocos registros deben interpretarse con precaución.
-
-## 4. Hallazgo 3: La actividad de juego se concentró en octubre de 2026
-
-La distribución mensual de las partidas fue la siguiente:
+Los cuatro jugadores que alcanzaron el tope de 200 partidas (`--max-partidas`) suman el 56 % de las filas. Como el tope conserva las partidas más recientes, la muestra también se concentra en el tiempo:
 
 | Mes | Partidas |
 |---|---:|
-| Septiembre de 2026 | 223 |
-| Octubre de 2026 | 770 |
-| Noviembre de 2026 | 447 |
-| **Total** | **1.440** |
+| Agosto de 2026 (desde el 24) | 5 |
+| Septiembre de 2026 | 91 |
+| Octubre de 2026 | 396 |
+| Noviembre de 2026 (hasta el 22) | 907 |
 
-Octubre concentró aproximadamente el **53,47 %** de las partidas analizadas, convirtiéndose en el mes con mayor cantidad de registros.
+Implicancia: esta distribución viene del diseño de la obtención (ventana de 90 días y tope por jugador), no de un cambio en la actividad de los jugadores. Los resultados pesan más los hábitos de esos cuatro jugadores, y la partición cronológica deja en la prueba (30 % más reciente) casi solo partidas de noviembre.
 
-Esto indica que la actividad observada no se distribuyó uniformemente durante el período estudiado. Sin embargo, también puede reflejar diferencias en la disponibilidad de datos entre los meses.
+## 5. Otras observaciones
 
-## 5. Conclusión
+- Modalidad: blitz tiene el menor porcentaje de victorias (42,14 % en 560 partidas), frente a rapid (48,98 %) y bullet (53,22 %). Cada jugador juega distintas modalidades en distinta proporción, así que esta diferencia puede deberse a quién juega cada una.
+- Aperturas: las más frecuentes son B01 (defensa escandinava, 122), A00 (aperturas irregulares, 105) y D02 (84). D tiene el menor porcentaje de victorias (41,92 %) y B el mayor (50,24 %). La familia E tiene solo 2 partidas.
+- Daily: solo hay 3 partidas, por lo que su porcentaje (66,67 %) no es interpretable.
 
-El análisis exploratorio permitió identificar tres patrones principales:
-
-1. Existen diferencias en los porcentajes de victorias entre modalidades, especialmente entre Rapid y Blitz.
-2. Una diferencia positiva de rating se asocia con una mayor proporción de victorias.
-3. La mayor cantidad de partidas registradas corresponde a octubre de 2026.
-
-Estos hallazgos proporcionan una descripción inicial de los datos y pueden servir como referencia para interpretar los resultados del modelo predictivo desarrollado en el proyecto.
-
-**Fuente:** `data/partidas_limpias.csv`, procesado mediante `ch explore` con Polars de Python.
+Fuente: `data/partidas_limpias.csv` y las tablas de `data/exploracion/`, generadas con `ch explore`.
