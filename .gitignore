@@ -12,3 +12,13 @@ data/modelo/*.txt
 # Variables locales con datos personales
 .env
 *.env
+data/partidas_procesadas.jsonl
+data/partidas_temporales.jsonl
+data/partidas_unicas.json
+
+# Entorno virtual de Python (Polars)
+.venv/
+
+# Archivos temporales de Python
+__pycache__/
+*.pyc

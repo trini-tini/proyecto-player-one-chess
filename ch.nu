@@ -600,9 +600,9 @@ export def "ch club" [
 # JUAN PABLO - COMANDO CH PUZZLE
 # Consulta puzzles de Chess.com
 # ==========================================
-
 export def "ch puzzle" [
-    --random  # Mostrar un puzzle aleatorio
+    --random   # Mostrar un puzzle aleatorio
+    --tablero  # Mostrar el tablero en la terminal
 ] {
     # Elegir el endpoint segun la opcion
     let url = if $random {
@@ -619,6 +619,44 @@ export def "ch puzzle" [
         return
     }
 
+    # Mostrar tablero de ajedrez a partir del FEN
+    if $tablero {
+        let fen = $respuesta.fen?
+
+        if $fen == null {
+            print "El puzzle no tiene una posicion FEN."
+        } else {
+            let piezas = {
+                r: "♜", n: "♞", b: "♝", q: "♛", k: "♚", p: "♟"
+                R: "♖", N: "♘", B: "♗", Q: "♕", K: "♔", P: "♙"
+            }
+
+            let posicion = ($fen | split row " " | first)
+            let filas = ($posicion | split row "/")
+
+            print "\n=== TABLERO DEL PUZZLE ==="
+
+            for fila in ($filas | enumerate) {
+                let casillas = (
+                    $fila.item
+                    | split chars
+                    | each {|c|
+                        if ($c =~ '^[1-8]$') {
+                            1..($c | into int) | each { "·" }
+                        } else {
+                            [($piezas | get $c)]
+                        }
+                    }
+                    | flatten
+                    | str join " "
+                )
+
+                print $"(8 - $fila.index) ($casillas)"
+            }
+
+            print "  a b c d e f g h"
+        }
+    }
     # Mostrar la informacion del puzzle
     {
         titulo: $respuesta.title?
@@ -1003,8 +1041,190 @@ export def "ch pipeline" [
     print "== 2/4 Depuración (ch clean)"
     let depuracion = (ch clean)
     print "== 3/4 Exploración (ch explore)"
-    # ch explore (Juan Pablo): se agrega aquí cuando esté en ch.nu
+    ch explore
     print "== 4/4 Modelación (ch model)"
     let modelacion = (ch model --passes $passes)
     {obtencion: $obtencion, depuracion: $depuracion, modelacion: $modelacion}
 }
+
+# ==========================================
+# JUAN PABLO - COMANDO CH EXPLORE
+# Exploracion de partidas de Chess.com
+# ==========================================
+
+export def "ch explore" [] {
+
+    ^./.venv/bin/python explore_polars.py
+    return
+
+    let archivo = "data/partidas_limpias.csv"
+
+    if not ($archivo | path exists) {
+        error make {msg: "No existe el archivo de partidas limpias. Ejecute ch clean primero."}
+    }
+
+    let partidas = (open $archivo)
+
+    print "=== EXPLORACION DE PARTIDAS ==="
+    print $"Total de partidas: ($partidas | length)"
+
+    # Porcentaje de victorias por color
+    let por_color = (
+        $partidas
+        | group-by color
+        | transpose color partidas
+        | each {|fila|
+            let total = ($fila.partidas | length)
+            let victorias = ($fila.partidas | where resultado == "victoria" | length)
+
+            {
+                color: $fila.color
+                partidas: $total
+                victorias: $victorias
+                porcentaje_victorias: ($victorias * 100 / $total | math round --precision 2)
+            }
+        }
+    )
+
+    print "=== VICTORIAS POR COLOR ==="
+    print ($por_color | table)
+
+    # Porcentaje de victorias por modalidad
+    let por_modalidad = (
+        $partidas
+        | group-by modalidad
+        | transpose modalidad partidas
+        | each {|fila|
+            let total = ($fila.partidas | length)
+            let victorias = ($fila.partidas | where resultado == "victoria" | length)
+
+            {
+                modalidad: $fila.modalidad
+                partidas: $total
+                victorias: $victorias
+                porcentaje_victorias: ($victorias * 100 / $total | math round --precision 2)
+            }
+        }
+        | sort-by modalidad
+    )
+
+    print "=== VICTORIAS POR MODALIDAD ==="
+    print ($por_modalidad | table)
+
+    # Porcentaje de victorias por diferencia de rating
+    let por_rating = (
+        $partidas
+        | insert d {|p| $p.rating_previo - $p.rating_rival }
+        | insert tramo {|p|
+            if $p.d < -200 {
+                "Menor a -200"
+            } else if $p.d < -100 {
+                "-200 a -101"
+            } else if $p.d < 0 {
+                "-100 a -1"
+            } else if $p.d == 0 {
+                "Igual rating"
+            } else if $p.d <= 100 {
+                "1 a 100"
+            } else if $p.d <= 200 {
+                "101 a 200"
+            } else {
+                "Mayor a 200"
+            }
+        }
+        | group-by tramo
+        | transpose tramo partidas
+        | each {|fila|
+            let total = ($fila.partidas | length)
+            let victorias = ($fila.partidas | where resultado == "victoria" | length)
+
+            {
+                tramo: $fila.tramo
+                partidas: $total
+                victorias: $victorias
+                porcentaje_victorias: ($victorias * 100 / $total | math round --precision 2)
+            }
+        }
+    )
+
+    print "=== VICTORIAS POR DIFERENCIA DE RATING ==="
+    print ($por_rating | table)
+
+    # Top 10 de aperturas ECO mas frecuentes
+    let top_eco = (
+        $partidas
+        | where eco != ""
+        | group-by eco
+        | transpose eco partidas
+        | each {|fila|
+            {
+                eco: $fila.eco
+                partidas: ($fila.partidas | length)
+            }
+        }
+        | sort-by partidas --reverse
+        | first 10
+    )
+
+    print "=== TOP 10 APERTURAS ECO ==="
+    print ($top_eco | table)
+
+    # Porcentaje de victorias por familia ECO
+    let por_familia = (
+        $partidas
+        | where familia_eco != ""
+        | group-by familia_eco
+        | transpose familia_eco partidas
+        | each {|fila|
+            let total = ($fila.partidas | length)
+            let victorias = ($fila.partidas | where resultado == "victoria" | length)
+
+            {
+                familia_eco: $fila.familia_eco
+                partidas: $total
+                victorias: $victorias
+                porcentaje_victorias: ($victorias * 100 / $total | math round --precision 2)
+            }
+        }
+        | sort-by familia_eco
+    )
+
+    print "=== VICTORIAS POR FAMILIA ECO ==="
+    print ($por_familia | table)
+
+    # Cantidad de partidas por mes
+    let por_mes = (
+        $partidas
+        | insert mes {|p| $p.fecha_fin | str substring 0..6 }
+        | group-by mes
+        | transpose mes partidas
+        | each {|fila|
+            {
+                mes: $fila.mes
+                partidas: ($fila.partidas | length)
+            }
+        }
+        | sort-by mes
+    )
+
+    print "=== PARTIDAS POR MES ==="
+    print ($por_mes | table)
+
+    # Cantidad de partidas por jugador
+    let por_jugador = (
+        $partidas
+        | group-by jugador
+        | transpose jugador partidas
+        | each {|fila|
+            {
+                jugador: $fila.jugador
+                partidas: ($fila.partidas | length)
+            }
+        }
+        | sort-by partidas --reverse
+    )
+
+    print "=== PARTIDAS POR JUGADOR ==="
+    print ($por_jugador | table)
+}
+
