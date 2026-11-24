@@ -105,12 +105,16 @@ La opción `--random` permite utilizar el endpoint de puzzles aleatorios.
 
 ## 6. Comparaciones con curl y jq
 
-Se realizaron tres consultas independientes para validar los resultados de los comandos implementados en Nushell.
+Se realizaron tres consultas independientes para validar los resultados de los comandos implementados en Nushell. Cada consulta lleva el mismo User-Agent que usan los comandos, con el correo de contacto leído de la variable de entorno `CHESS_EMAIL`:
+
+```bash
+UA="PlayerOne-UBB/1.0 (contacto: $CHESS_EMAIL)"
+```
 
 ### 6.1. Ranking
 
 ```bash
-curl -s -A "PlayerOne-UBB/1.0" https://api.chess.com/pub/leaderboards | jq '.live_blitz[:5] | map({rank, username, score})'
+curl -s -A "$UA" https://api.chess.com/pub/leaderboards | jq '.live_blitz[:5] | map({rank, username, score})'
 ```
 
 El resultado coincidió con `ch top live_blitz --n 5` en los cinco jugadores, sus posiciones y puntajes.
@@ -118,7 +122,7 @@ El resultado coincidió con `ch top live_blitz --n 5` en los cinco jugadores, su
 ### 6.2. Jugadores de Chile
 
 ```bash
-curl -s -A "PlayerOne-UBB/1.0" https://api.chess.com/pub/country/CL/players | jq '{total: (.players | length), primeros: .players[:3]}'
+curl -s -A "$UA" https://api.chess.com/pub/country/CL/players | jq '{total: (.players | length), primeros: .players[:3]}'
 ```
 
 Se obtuvieron 10.000 registros y los tres primeros nombres coincidieron con `ch pais CL --n 3`.
@@ -126,7 +130,7 @@ Se obtuvieron 10.000 registros y los tres primeros nombres coincidieron con `ch 
 ### 6.3. Miembros de un club
 
 ```bash
-curl -s -A "PlayerOne-UBB/1.0" https://api.chess.com/pub/club/chesscom/members | jq '{weekly: (.weekly | length), monthly: (.monthly | length), all_time: (.all_time | length)}'
+curl -s -A "$UA" https://api.chess.com/pub/club/chesscom/members | jq '{weekly: (.weekly | length), monthly: (.monthly | length), all_time: (.all_time | length)}'
 ```
 
 Se obtuvieron 0, 0 y 7 integrantes, respectivamente, coincidiendo con `ch club chesscom`.
